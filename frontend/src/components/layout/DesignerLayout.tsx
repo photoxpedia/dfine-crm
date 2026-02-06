@@ -10,12 +10,12 @@ import {
   Menu,
   X,
   ChevronDown,
-  Bell,
   Calculator,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/lib/api';
+import NotificationBell from './NotificationBell';
 
 const navigation = [
   { name: 'Dashboard', href: '/designer', icon: LayoutDashboard },
@@ -120,12 +120,7 @@ export default function DesignerLayout() {
             <div className="flex-1 lg:ml-0" />
 
             <div className="flex items-center gap-4">
-              <button className="text-gray-500 hover:text-gray-700 relative">
-                <Bell className="w-5 h-5" />
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-designer-500 rounded-full text-xs text-white flex items-center justify-center">
-                  5
-                </span>
-              </button>
+              <NotificationBell basePath="/designer" />
 
               <div className="relative">
                 <button

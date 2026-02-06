@@ -20,6 +20,7 @@ import ClientDashboard from '@/features/dashboard/ClientDashboard';
 
 // Lead pages
 import LeadsListPage from '@/features/leads/LeadsListPage';
+import LeadDetailPage from '@/features/leads/LeadDetailPage';
 import LeadFormPage from '@/features/leads/LeadFormPage';
 
 // Project pages
@@ -139,7 +140,8 @@ export default function App() {
         <Route path="users" element={<UsersPage />} />
         <Route path="leads" element={<LeadsListPage />} />
         <Route path="leads/new" element={<LeadFormPage />} />
-        <Route path="leads/:id" element={<LeadFormPage />} />
+        <Route path="leads/:id" element={<LeadDetailPage />} />
+        <Route path="leads/:id/edit" element={<LeadFormPage />} />
         <Route path="projects" element={<ProjectsListPage />} />
         <Route path="projects/new" element={<ProjectFormPage />} />
         <Route path="projects/:id" element={<ProjectDetailPage />} />
@@ -167,7 +169,8 @@ export default function App() {
         <Route index element={<DesignerDashboard />} />
         <Route path="leads" element={<LeadsListPage />} />
         <Route path="leads/new" element={<LeadFormPage />} />
-        <Route path="leads/:id" element={<LeadFormPage />} />
+        <Route path="leads/:id" element={<LeadDetailPage />} />
+        <Route path="leads/:id/edit" element={<LeadFormPage />} />
         <Route path="projects" element={<ProjectsListPage />} />
         <Route path="projects/new" element={<ProjectFormPage />} />
         <Route path="projects/:id" element={<ProjectDetailPage />} />
