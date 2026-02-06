@@ -1,0 +1,43 @@
+{
+  "name": "dfine-kitchen-bath-crm",
+  "version": "1.0.0",
+  "description": "CRM for bathroom and kitchen remodeling business",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "start": "cd backend && npm start",
+    "db:generate": "cd backend && npm run db:generate",
+    "db:push": "cd backend && npm run db:push",
+    "db:migrate": "cd backend && npm run db:migrate",
+    "db:seed": "cd backend && npm run db:seed",
+    "db:studio": "cd backend && npm run db:studio",
+    "lint": "cd frontend && npm run lint",
+    "clean": "rm -rf backend/node_modules backend/dist frontend/node_modules frontend/dist node_modules"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "keywords": [
+    "crm",
+    "remodeling",
+    "kitchen",
+    "bathroom",
+    "estimate",
+    "project-management"
+  ],
+  "author": "D'Fine Kitchen & Bath Remodeling",
+  "license": "UNLICENSED"
+}

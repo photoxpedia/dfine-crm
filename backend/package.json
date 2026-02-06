@@ -1,0 +1,45 @@
+{
+  "name": "dfine-crm-backend",
+  "version": "1.0.0",
+  "description": "Backend for D'Fine Kitchen & Bath Remodeling CRM",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.7.0",
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
+    "nodemailer": "^6.9.7",
+    "square": "^35.0.0",
+    "uuid": "^9.0.1",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^20.10.4",
+    "@types/nodemailer": "^6.4.14",
+    "@types/uuid": "^9.0.7",
+    "prisma": "^5.7.0",
+    "tsx": "^4.6.2",
+    "typescript": "^5.3.3"
+  }
+}
