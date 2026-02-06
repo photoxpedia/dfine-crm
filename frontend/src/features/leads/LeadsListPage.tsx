@@ -14,10 +14,11 @@ import {
   Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { leadsApi, dashboardApi } from '@/lib/api';
+import { leadsApi, dashboardApi, usersApi } from '@/lib/api';
 import { formatDate, formatPhone, cn, getStatusColor, getLeadStatusLabel, getBasePath } from '@/lib/utils';
+import { useIsAdmin } from '@/store/authStore';
 import { StatusChangeModal } from './components';
-import type { Lead, LeadStatus, ProjectType, SubStatus, FollowUpReason } from '@/types';
+import type { Lead, LeadStatus, ProjectType, SubStatus, FollowUpReason, User } from '@/types';
 
 const STATUS_OPTIONS: LeadStatus[] = [
   'new',
@@ -36,23 +37,38 @@ export default function LeadsListPage() {
   const location = useLocation();
   const basePath = getBasePath(location.pathname);
   const queryClient = useQueryClient();
+  const isAdmin = useIsAdmin();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | ''>('');
   const [projectTypeFilter, setProjectTypeFilter] = useState<ProjectType | ''>('');
+  const [designerFilter, setDesignerFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
 
+  // Get designers for admin filter
+  const { data: designersData } = useQuery({
+    queryKey: ['users', 'designers'],
+    queryFn: async () => {
+      const response = await usersApi.getDesigners();
+      return response.data;
+    },
+    enabled: isAdmin,
+  });
+
+  const designers = (designersData?.users || []) as User[];
+
   // Get leads
   const { data, isLoading } = useQuery({
-    queryKey: ['leads', { search, status: statusFilter, projectType: projectTypeFilter, page }],
+    queryKey: ['leads', { search, status: statusFilter, projectType: projectTypeFilter, designerId: designerFilter, page }],
     queryFn: async () => {
       const response = await leadsApi.list({
         search: search || undefined,
         status: statusFilter || undefined,
         projectType: projectTypeFilter || undefined,
+        designerId: designerFilter || undefined,
         page,
         limit: 20,
       });
@@ -153,21 +169,24 @@ export default function LeadsListPage() {
             onClick={() => setShowFilters(!showFilters)}
             className={cn(
               'btn btn-outline',
-              (statusFilter || projectTypeFilter) && 'border-designer-300 text-designer-700'
+              (statusFilter || projectTypeFilter || designerFilter) && 'border-designer-300 text-designer-700'
             )}
           >
             <Filter className="w-4 h-4 mr-2" />
             Filters
-            {(statusFilter || projectTypeFilter) && (
+            {(statusFilter || projectTypeFilter || designerFilter) && (
               <span className="ml-2 w-5 h-5 bg-designer-100 text-designer-700 rounded-full text-xs flex items-center justify-center">
-                {(statusFilter ? 1 : 0) + (projectTypeFilter ? 1 : 0)}
+                {(statusFilter ? 1 : 0) + (projectTypeFilter ? 1 : 0) + (designerFilter ? 1 : 0)}
               </span>
             )}
           </button>
         </div>
 
         {showFilters && (
-          <div className="mt-4 pt-4 border-t border-gray-200 grid sm:grid-cols-2 gap-4">
+          <div className={cn(
+            'mt-4 pt-4 border-t border-gray-200 grid gap-4',
+            isAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'
+          )}>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
               <select
@@ -198,6 +217,23 @@ export default function LeadsListPage() {
                 ))}
               </select>
             </div>
+            {isAdmin && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Designer</label>
+                <select
+                  value={designerFilter}
+                  onChange={(e) => setDesignerFilter(e.target.value)}
+                  className="input"
+                >
+                  <option value="">All Designers</option>
+                  {designers.map((designer) => (
+                    <option key={designer.id} value={designer.id}>
+                      {designer.name || designer.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         )}
       </div>
