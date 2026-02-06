@@ -1,8 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import fs from 'fs';
 import prisma from '../config/database.js';
-import { authenticate, requireDesignerOrAdmin } from '../middleware/auth.js';
-import { LeadStatus, ProjectType } from '@prisma/client';
+import { authenticate, requireDesignerOrAdmin, requireAdmin } from '../middleware/auth.js';
+import { LeadStatus, SubStatus, FollowUpReason, ProjectType, PhotoTag } from '@prisma/client';
+import { createLeadHistory, getLeadHistory } from '../services/leadHistory.service.js';
+import { createNotification } from '../services/notification.service.js';
+import { uploadLeadPhotos, getFullPath } from '../config/upload.js';
 
 const router = Router();
 
@@ -22,17 +26,34 @@ const createLeadSchema = z.object({
 
 const updateLeadSchema = createLeadSchema.partial().extend({
   status: z.nativeEnum(LeadStatus).optional(),
+  subStatus: z.nativeEnum(SubStatus).optional().nullable(),
+});
+
+const statusChangeSchema = z.object({
+  status: z.nativeEnum(LeadStatus),
+  subStatus: z.nativeEnum(SubStatus).optional().nullable(),
+  note: z.string().min(1, 'Note is required for status change'),
+  followUpDate: z.string().datetime().optional().nullable(),
+  followUpReason: z.nativeEnum(FollowUpReason).optional().nullable(),
+  followUpReasonOther: z.string().optional().nullable(),
+});
+
+const addNoteSchema = z.object({
+  note: z.string().min(1, 'Note is required'),
 });
 
 // List leads
 router.get('/', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
-  const { status, projectType, search, page = '1', limit = '20' } = req.query;
+  const { status, projectType, search, designerId, page = '1', limit = '20' } = req.query;
 
   const where: any = {};
 
   // Designers only see their own leads, admin sees all
   if (req.user!.role === 'designer') {
     where.designerId = req.user!.id;
+  } else if (designerId) {
+    // Admin can filter by designer
+    where.designerId = designerId as string;
   }
 
   if (status) {
@@ -80,7 +101,7 @@ router.get('/', authenticate, requireDesignerOrAdmin, async (req: Request, res: 
   });
 });
 
-// Get single lead
+// Get single lead with history
 router.get('/:id', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
   const lead = await prisma.lead.findUnique({
     where: { id: req.params.id },
@@ -89,6 +110,19 @@ router.get('/:id', authenticate, requireDesignerOrAdmin, async (req: Request, re
       projects: {
         include: {
           estimates: { select: { id: true, version: true, status: true, total: true } },
+        },
+      },
+      photos: {
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: { select: { id: true, name: true } },
+        },
+      },
+      history: {
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        include: {
+          user: { select: { id: true, name: true, email: true } },
         },
       },
     },
@@ -112,14 +146,35 @@ router.get('/:id', authenticate, requireDesignerOrAdmin, async (req: Request, re
 router.post('/', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
   const data = createLeadSchema.parse(req.body);
 
+  // Get user's organization
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
   const lead = await prisma.lead.create({
     data: {
       ...data,
+      organizationId: userOrg.organizationId,
       designerId: req.user!.id,
     },
     include: {
       designer: { select: { id: true, name: true, email: true } },
     },
+  });
+
+  // Create history entry for lead creation
+  await createLeadHistory({
+    leadId: lead.id,
+    userId: req.user!.id,
+    eventType: 'created',
+    newValue: JSON.stringify({ status: lead.status }),
+    note: 'Lead created',
   });
 
   res.status(201).json(lead);
@@ -156,13 +211,12 @@ router.put('/:id', authenticate, requireDesignerOrAdmin, async (req: Request, re
   res.json(lead);
 });
 
-// Update lead status
+// Update lead status with history tracking
 router.patch('/:id/status', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
-  const { status } = z.object({ status: z.nativeEnum(LeadStatus) }).parse(req.body);
+  const data = statusChangeSchema.parse(req.body);
 
   const existing = await prisma.lead.findUnique({
     where: { id: req.params.id },
-    select: { designerId: true },
   });
 
   if (!existing) {
@@ -175,12 +229,350 @@ router.patch('/:id/status', authenticate, requireDesignerOrAdmin, async (req: Re
     return;
   }
 
+  // Determine sub-status based on new status
+  let newSubStatus = data.subStatus;
+  if (['pre_estimate', 'estimated', 'converted'].includes(data.status) && !newSubStatus) {
+    newSubStatus = 'in_progress'; // Default to in_progress
+  } else if (!['pre_estimate', 'estimated', 'converted'].includes(data.status)) {
+    newSubStatus = null; // Clear sub-status for statuses that don't use it
+  }
+
+  // Prepare update data
+  const updateData: any = {
+    status: data.status,
+    subStatus: newSubStatus,
+  };
+
+  // Handle follow-up for on_hold and future_client
+  if (data.status === 'on_hold' || data.status === 'future_client') {
+    if (data.followUpDate) {
+      updateData.followUpDate = new Date(data.followUpDate);
+    }
+    updateData.followUpReason = data.followUpReason || null;
+    updateData.followUpReasonOther = data.followUpReasonOther || null;
+  } else {
+    // Clear follow-up data for other statuses
+    updateData.followUpDate = null;
+    updateData.followUpReason = null;
+    updateData.followUpReasonOther = null;
+  }
+
   const lead = await prisma.lead.update({
     where: { id: req.params.id },
-    data: { status },
+    data: updateData,
+    include: {
+      designer: { select: { id: true, name: true, email: true } },
+    },
+  });
+
+  // Create history entry
+  const eventType = existing.subStatus !== newSubStatus && existing.status === data.status
+    ? 'substatus_change'
+    : 'status_change';
+
+  await createLeadHistory({
+    leadId: lead.id,
+    userId: req.user!.id,
+    eventType,
+    oldValue: JSON.stringify({
+      status: existing.status,
+      subStatus: existing.subStatus,
+    }),
+    newValue: JSON.stringify({
+      status: lead.status,
+      subStatus: lead.subStatus,
+    }),
+    note: data.note,
+    metadata: data.followUpDate ? { followUpDate: data.followUpDate, followUpReason: data.followUpReason } : undefined,
+  });
+
+  // If follow-up was set, create additional history entry
+  if (data.followUpDate) {
+    await createLeadHistory({
+      leadId: lead.id,
+      userId: req.user!.id,
+      eventType: 'followup_set',
+      newValue: data.followUpDate,
+      note: `Follow-up scheduled: ${data.followUpReason || 'General'}`,
+    });
+  }
+
+  // Handle reactivation from dropped
+  if (existing.status === 'dropped' && data.status !== 'dropped') {
+    await createLeadHistory({
+      leadId: lead.id,
+      userId: req.user!.id,
+      eventType: 'reactivated',
+      oldValue: 'dropped',
+      newValue: data.status,
+      note: 'Lead reactivated from dropped status',
+    });
+  }
+
+  res.json(lead);
+});
+
+// Assign lead to designer (admin only)
+router.patch('/:id/assign', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  const { designerId } = z.object({ designerId: z.string().uuid() }).parse(req.body);
+
+  const existing = await prisma.lead.findUnique({
+    where: { id: req.params.id },
+    include: {
+      designer: { select: { id: true, name: true } },
+    },
+  });
+
+  if (!existing) {
+    res.status(404).json({ error: 'Lead not found' });
+    return;
+  }
+
+  // Verify new designer exists and is a designer
+  const newDesigner = await prisma.user.findUnique({
+    where: { id: designerId },
+    select: { id: true, name: true, email: true, role: true },
+  });
+
+  if (!newDesigner || newDesigner.role !== 'designer') {
+    res.status(400).json({ error: 'Invalid designer' });
+    return;
+  }
+
+  const lead = await prisma.lead.update({
+    where: { id: req.params.id },
+    data: { designerId },
+    include: {
+      designer: { select: { id: true, name: true, email: true } },
+    },
+  });
+
+  // Create history entry
+  await createLeadHistory({
+    leadId: lead.id,
+    userId: req.user!.id,
+    eventType: 'assigned',
+    oldValue: existing.designer?.name || null,
+    newValue: newDesigner.name,
+    note: `Lead assigned to ${newDesigner.name}`,
+  });
+
+  // Send notification to the new designer
+  await createNotification({
+    userId: designerId,
+    type: 'lead_new',
+    title: 'New Lead Assigned',
+    message: `You have been assigned a new lead: ${lead.firstName} ${lead.lastName}`,
+    entityType: 'lead',
+    entityId: lead.id,
+    sendEmailNotification: true,
+    emailSubject: `New Lead: ${lead.firstName} ${lead.lastName}`,
+    emailBody: `
+      <h2>New Lead Assigned</h2>
+      <p>You have been assigned a new lead:</p>
+      <p><strong>${lead.firstName} ${lead.lastName}</strong></p>
+      <p>Project Type: ${lead.projectType || 'Not specified'}</p>
+      <p>Source: ${lead.source || 'Not specified'}</p>
+    `,
   });
 
   res.json(lead);
+});
+
+// Add note to lead
+router.post('/:id/notes', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+  const { note } = addNoteSchema.parse(req.body);
+
+  const existing = await prisma.lead.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, designerId: true },
+  });
+
+  if (!existing) {
+    res.status(404).json({ error: 'Lead not found' });
+    return;
+  }
+
+  if (req.user!.role === 'designer' && existing.designerId !== req.user!.id) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  const historyEntry = await createLeadHistory({
+    leadId: existing.id,
+    userId: req.user!.id,
+    eventType: 'note_added',
+    note,
+  });
+
+  res.status(201).json(historyEntry);
+});
+
+// Get lead history (timeline)
+router.get('/:id/history', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+  const { limit = '50', offset = '0' } = req.query;
+
+  const existing = await prisma.lead.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, designerId: true },
+  });
+
+  if (!existing) {
+    res.status(404).json({ error: 'Lead not found' });
+    return;
+  }
+
+  if (req.user!.role === 'designer' && existing.designerId !== req.user!.id) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  const history = await getLeadHistory(
+    existing.id,
+    parseInt(limit as string),
+    parseInt(offset as string)
+  );
+
+  res.json(history);
+});
+
+// Upload photos to lead
+router.post(
+  '/:id/photos',
+  authenticate,
+  requireDesignerOrAdmin,
+  uploadLeadPhotos.array('photos', 20),
+  async (req: Request, res: Response) => {
+    const existing = await prisma.lead.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, designerId: true },
+    });
+
+    if (!existing) {
+      res.status(404).json({ error: 'Lead not found' });
+      return;
+    }
+
+    if (req.user!.role === 'designer' && existing.designerId !== req.user!.id) {
+      res.status(403).json({ error: 'Access denied' });
+      return;
+    }
+
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      res.status(400).json({ error: 'No files uploaded' });
+      return;
+    }
+
+    const tag = (req.body.tag as PhotoTag) || 'before_photo';
+
+    // Create photo records
+    const photos = await Promise.all(
+      files.map(async (file) => {
+        const photo = await prisma.leadPhoto.create({
+          data: {
+            leadId: existing.id,
+            userId: req.user!.id,
+            filePath: file.path,
+            fileName: file.originalname,
+            fileSize: file.size,
+            mimeType: file.mimetype,
+            tag,
+          },
+          include: {
+            user: { select: { id: true, name: true } },
+          },
+        });
+        return photo;
+      })
+    );
+
+    // Create single history entry for the upload batch
+    await createLeadHistory({
+      leadId: existing.id,
+      userId: req.user!.id,
+      eventType: 'photo_uploaded',
+      note: `${files.length} photo${files.length > 1 ? 's' : ''} uploaded`,
+      metadata: {
+        photoIds: photos.map((p) => p.id),
+        tag,
+      },
+    });
+
+    res.status(201).json(photos);
+  }
+);
+
+// Get lead photos
+router.get('/:id/photos', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+  const existing = await prisma.lead.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, designerId: true },
+  });
+
+  if (!existing) {
+    res.status(404).json({ error: 'Lead not found' });
+    return;
+  }
+
+  if (req.user!.role === 'designer' && existing.designerId !== req.user!.id) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  const photos = await prisma.leadPhoto.findMany({
+    where: { leadId: existing.id },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      user: { select: { id: true, name: true } },
+    },
+  });
+
+  res.json(photos);
+});
+
+// Delete photo
+router.delete('/:id/photos/:photoId', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+  const existing = await prisma.lead.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, designerId: true },
+  });
+
+  if (!existing) {
+    res.status(404).json({ error: 'Lead not found' });
+    return;
+  }
+
+  if (req.user!.role === 'designer' && existing.designerId !== req.user!.id) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  const photo = await prisma.leadPhoto.findFirst({
+    where: { id: req.params.photoId, leadId: existing.id },
+  });
+
+  if (!photo) {
+    res.status(404).json({ error: 'Photo not found' });
+    return;
+  }
+
+  // Delete file from disk
+  try {
+    const fullPath = getFullPath(photo.filePath);
+    if (fs.existsSync(fullPath)) {
+      fs.unlinkSync(fullPath);
+    }
+  } catch (error) {
+    console.error('Error deleting photo file:', error);
+  }
+
+  // Delete from database
+  await prisma.leadPhoto.delete({
+    where: { id: photo.id },
+  });
+
+  res.json({ message: 'Photo deleted successfully' });
 });
 
 // Convert lead to project
@@ -227,6 +619,7 @@ router.post('/:id/convert', authenticate, requireDesignerOrAdmin, async (req: Re
 
     const project = await tx.project.create({
       data: {
+        organizationId: lead.organizationId,
         leadId: lead.id,
         designerId: lead.designerId,
         clientId,
@@ -240,13 +633,24 @@ router.post('/:id/convert', authenticate, requireDesignerOrAdmin, async (req: Re
       },
     });
 
-    // Update lead status to won
+    // Update lead status to converted
     await tx.lead.update({
       where: { id: lead.id },
-      data: { status: 'won' },
+      data: { status: 'converted', subStatus: 'complete' },
     });
 
     return project;
+  });
+
+  // Create history entry
+  await createLeadHistory({
+    leadId: lead.id,
+    userId: req.user!.id,
+    eventType: 'status_change',
+    oldValue: JSON.stringify({ status: lead.status, subStatus: lead.subStatus }),
+    newValue: JSON.stringify({ status: 'converted', subStatus: 'complete' }),
+    note: `Lead converted to project: ${project.name}`,
+    metadata: { projectId: project.id },
   });
 
   res.status(201).json(project);

@@ -1,5 +1,5 @@
 import prisma from '../config/database.js';
-import { NotificationType } from '@prisma/client';
+import { NotificationType, Prisma } from '@prisma/client';
 import { sendEmail } from '../config/email.js';
 
 interface CreateNotificationParams {
@@ -22,9 +22,9 @@ export async function createNotification(params: CreateNotificationParams) {
       type: params.type,
       title: params.title,
       message: params.message,
-      entityType: params.entityType || null,
-      entityId: params.entityId || null,
-      data: params.data || null,
+      entityType: params.entityType ?? null,
+      entityId: params.entityId ?? null,
+      data: params.data ?? Prisma.JsonNull,
     },
   });
 

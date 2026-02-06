@@ -13,11 +13,16 @@ export interface User {
 }
 
 // Lead types
-export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'proposal' | 'won' | 'lost';
+export type LeadStatus = 'new' | 'contacted' | 'pre_estimate' | 'estimated' | 'converted' | 'on_hold' | 'future_client' | 'dropped';
+export type SubStatus = 'in_progress' | 'complete';
+export type FollowUpReason = 'budget' | 'timing' | 'permits' | 'comparing' | 'personal' | 'other';
+export type LeadEventType = 'created' | 'status_change' | 'substatus_change' | 'note_added' | 'photo_uploaded' | 'assigned' | 'followup_set' | 'reactivated';
+export type PhotoTag = 'before_photo' | 'measurement' | 'other';
 export type ProjectType = 'bathroom' | 'kitchen' | 'general';
 
 export interface Lead {
   id: string;
+  organizationId: string;
   designerId: string;
   firstName: string;
   lastName: string;
@@ -29,10 +34,79 @@ export interface Lead {
   zip?: string;
   source?: string;
   status: LeadStatus;
+  subStatus?: SubStatus;
   projectType: ProjectType;
   notes?: string;
+  followUpDate?: string;
+  followUpReason?: FollowUpReason;
+  followUpReasonOther?: string;
   createdAt: string;
   updatedAt: string;
+  designer?: User;
+  photos?: LeadPhoto[];
+  history?: LeadHistory[];
+}
+
+export interface LeadHistory {
+  id: string;
+  leadId: string;
+  userId: string;
+  eventType: LeadEventType;
+  oldValue?: string;
+  newValue?: string;
+  note?: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
+  user?: User;
+}
+
+export interface LeadPhoto {
+  id: string;
+  leadId: string;
+  userId: string;
+  filePath: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  tag: PhotoTag;
+  historyId?: string;
+  createdAt: string;
+  user?: User;
+}
+
+export interface LeadSource {
+  id: string;
+  organizationId: string;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  message: string;
+  entityType?: string;
+  entityId?: string;
+  isRead: boolean;
+  data?: Record<string, any>;
+  readAt?: string;
+  createdAt: string;
+}
+
+export interface FollowUp {
+  id: string;
+  firstName: string;
+  lastName: string;
+  projectType: ProjectType;
+  status: LeadStatus;
+  followUpDate: string;
+  followUpReason?: FollowUpReason;
+  followUpReasonOther?: string;
   designer?: User;
 }
 

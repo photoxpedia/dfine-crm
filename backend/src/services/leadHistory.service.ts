@@ -1,5 +1,5 @@
 import prisma from '../config/database.js';
-import { LeadEventType } from '@prisma/client';
+import { LeadEventType, Prisma } from '@prisma/client';
 
 interface CreateHistoryParams {
   leadId: string;
@@ -17,10 +17,10 @@ export async function createLeadHistory(params: CreateHistoryParams) {
       leadId: params.leadId,
       userId: params.userId,
       eventType: params.eventType,
-      oldValue: params.oldValue || null,
-      newValue: params.newValue || null,
-      note: params.note || null,
-      metadata: params.metadata || null,
+      oldValue: params.oldValue ?? null,
+      newValue: params.newValue ?? null,
+      note: params.note ?? null,
+      metadata: params.metadata ?? Prisma.JsonNull,
     },
     include: {
       user: {

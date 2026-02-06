@@ -66,7 +66,7 @@ export const authApi = {
 
 // Leads API
 export const leadsApi = {
-  list: (params?: { status?: string; projectType?: string; search?: string; page?: number; limit?: number }) =>
+  list: (params?: { status?: string; projectType?: string; search?: string; designerId?: string; page?: number; limit?: number }) =>
     api.get('/leads', { params }),
 
   get: (id: string) => api.get(`/leads/${id}`),
@@ -75,12 +75,80 @@ export const leadsApi = {
 
   update: (id: string, data: any) => api.put(`/leads/${id}`, data),
 
-  updateStatus: (id: string, status: string) =>
-    api.patch(`/leads/${id}/status`, { status }),
+  updateStatus: (id: string, data: {
+    status: string;
+    subStatus?: string;
+    note: string;
+    followUpDate?: string;
+    followUpReason?: string;
+    followUpReasonOther?: string;
+  }) => api.patch(`/leads/${id}/status`, data),
+
+  assign: (id: string, designerId: string) =>
+    api.patch(`/leads/${id}/assign`, { designerId }),
+
+  addNote: (id: string, note: string) =>
+    api.post(`/leads/${id}/notes`, { note }),
+
+  getHistory: (id: string, params?: { limit?: number; offset?: number }) =>
+    api.get(`/leads/${id}/history`, { params }),
+
+  uploadPhotos: (id: string, formData: FormData) =>
+    api.post(`/leads/${id}/photos`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
+  getPhotos: (id: string) => api.get(`/leads/${id}/photos`),
+
+  deletePhoto: (id: string, photoId: string) =>
+    api.delete(`/leads/${id}/photos/${photoId}`),
 
   convert: (id: string) => api.post(`/leads/${id}/convert`),
 
   delete: (id: string) => api.delete(`/leads/${id}`),
+};
+
+// Lead Sources API
+export const leadSourcesApi = {
+  list: (includeInactive = false) =>
+    api.get('/lead-sources', { params: { includeInactive } }),
+
+  create: (data: { name: string; sortOrder?: number }) =>
+    api.post('/lead-sources', data),
+
+  update: (id: string, data: { name?: string; isActive?: boolean; sortOrder?: number }) =>
+    api.put(`/lead-sources/${id}`, data),
+
+  reorder: (sourceIds: string[]) =>
+    api.patch('/lead-sources/reorder', { sourceIds }),
+
+  delete: (id: string) => api.delete(`/lead-sources/${id}`),
+};
+
+// Notifications API
+export const notificationsApi = {
+  list: (params?: { unreadOnly?: boolean; limit?: number }) =>
+    api.get('/notifications', { params }),
+
+  getUnreadCount: () => api.get('/notifications/unread-count'),
+
+  markRead: (id: string) => api.patch(`/notifications/${id}/read`),
+
+  markAllRead: () => api.patch('/notifications/read-all'),
+
+  delete: (id: string) => api.delete(`/notifications/${id}`),
+};
+
+// Dashboard API
+export const dashboardApi = {
+  getFollowups: () => api.get('/dashboard/followups'),
+
+  getTodayFollowups: () => api.get('/dashboard/followups/today'),
+
+  getLeadStats: () => api.get('/dashboard/lead-stats'),
+
+  getRecentActivity: (limit = 10) =>
+    api.get('/dashboard/recent-activity', { params: { limit } }),
 };
 
 // Projects API

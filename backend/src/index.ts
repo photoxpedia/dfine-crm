@@ -20,6 +20,9 @@ import invoicesRoutes from './routes/invoices.routes.js';
 import contractsRoutes from './routes/contracts.routes.js';
 import projectManagementRoutes from './routes/project-management.routes.js';
 import reportsRoutes from './routes/reports.routes.js';
+import leadSourcesRoutes from './routes/lead-sources.routes.js';
+import notificationsRoutes from './routes/notifications.routes.js';
+import dashboardRoutes from './routes/dashboard.routes.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -56,6 +59,9 @@ app.use('/api/invoices', invoicesRoutes);
 app.use('/api/contracts', contractsRoutes);
 app.use('/api/projects', projectManagementRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/lead-sources', leadSourcesRoutes);
+app.use('/api/notifications', notificationsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Error handling
 app.use(notFoundHandler);

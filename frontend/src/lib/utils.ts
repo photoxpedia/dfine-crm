@@ -60,17 +60,21 @@ export function getStatusColor(status: string): string {
     // Lead statuses
     new: 'badge-blue',
     contacted: 'badge-yellow',
-    qualified: 'badge-purple',
-    proposal: 'badge-purple',
-    won: 'badge-green',
-    lost: 'badge-red',
+    pre_estimate: 'badge-purple',
+    estimated: 'badge-purple',
+    converted: 'badge-green',
+    on_hold: 'badge-yellow',
+    future_client: 'badge-gray',
+    dropped: 'badge-red',
+
+    // Sub-statuses
+    in_progress: 'badge-blue',
+    complete: 'badge-green',
 
     // Project statuses
     draft: 'badge-gray',
     pending_approval: 'badge-yellow',
     approved: 'badge-green',
-    in_progress: 'badge-blue',
-    on_hold: 'badge-yellow',
     completed: 'badge-green',
     cancelled: 'badge-red',
 
@@ -97,6 +101,51 @@ export function getStatusColor(status: string): string {
   };
 
   return colors[status] || 'badge-gray';
+}
+
+export function getLeadStatusLabel(status: string, subStatus?: string): string {
+  const labels: Record<string, string> = {
+    new: 'New',
+    contacted: 'Contacted',
+    pre_estimate: 'Pre-Estimate',
+    estimated: 'Estimated',
+    converted: 'Converted',
+    on_hold: 'On Hold',
+    future_client: 'Future Client',
+    dropped: 'Dropped',
+  };
+
+  let label = labels[status] || formatStatus(status);
+  if (subStatus && ['pre_estimate', 'estimated', 'converted'].includes(status)) {
+    label += ` (${subStatus === 'in_progress' ? 'In Progress' : 'Complete'})`;
+  }
+  return label;
+}
+
+export function getFollowUpReasonLabel(reason: string): string {
+  const labels: Record<string, string> = {
+    budget: 'Budget constraints',
+    timing: 'Timing not right',
+    permits: 'Waiting on permits',
+    comparing: 'Comparing quotes',
+    personal: 'Personal circumstances',
+    other: 'Other',
+  };
+  return labels[reason] || reason;
+}
+
+export function getEventTypeLabel(eventType: string): string {
+  const labels: Record<string, string> = {
+    created: 'Lead Created',
+    status_change: 'Status Changed',
+    substatus_change: 'Progress Updated',
+    note_added: 'Note Added',
+    photo_uploaded: 'Photos Uploaded',
+    assigned: 'Lead Assigned',
+    followup_set: 'Follow-up Scheduled',
+    reactivated: 'Lead Reactivated',
+  };
+  return labels[eventType] || formatStatus(eventType);
 }
 
 export function formatStatus(status: string): string {

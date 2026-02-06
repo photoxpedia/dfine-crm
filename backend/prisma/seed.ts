@@ -1,4 +1,4 @@
-import { PrismaClient, ProjectType, UnitOfMeasure } from '@prisma/client';
+import { PrismaClient, ProjectType, UnitOfMeasure, LeadStatus } from '@prisma/client';
 import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -6,6 +6,17 @@ const SALT_ROUNDS = 10;
 
 // Default password for test users
 const DEFAULT_PASSWORD = 'password123';
+
+// Default lead sources
+const defaultLeadSources = [
+  { name: 'Phone Call', sortOrder: 0 },
+  { name: 'Walk-in', sortOrder: 1 },
+  { name: 'Website', sortOrder: 2 },
+  { name: 'Referral', sortOrder: 3 },
+  { name: 'Social Media', sortOrder: 4 },
+  { name: 'Home Show/Event', sortOrder: 5 },
+  { name: 'Other', sortOrder: 6 },
+];
 
 // Bathroom pricing data from the spreadsheet
 const bathroomCategories = [
@@ -193,6 +204,23 @@ async function main() {
   // Hash default password
   const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, SALT_ROUNDS);
 
+  // Create organization first
+  const organization = await prisma.organization.upsert({
+    where: { slug: 'dfine-kb' },
+    update: {},
+    create: {
+      name: "D'Fine Kitchen & Bath",
+      slug: 'dfine-kb',
+      email: 'info@dfinekb.com',
+      phone: '(555) 123-4567',
+      address: '123 Business Ave',
+      city: 'Austin',
+      state: 'TX',
+      zip: '78701',
+    },
+  });
+  console.log('Created organization:', organization.name);
+
   // Create admin user
   const admin = await prisma.user.upsert({
     where: { email: 'admin@dfinekb.com' },
@@ -220,11 +248,54 @@ async function main() {
   console.log('Created designer user:', designer.email);
   console.log('Default password for all users:', DEFAULT_PASSWORD);
 
+  // Add users to organization
+  for (const user of [admin, designer]) {
+    await prisma.organizationMember.upsert({
+      where: {
+        organizationId_userId: {
+          organizationId: organization.id,
+          userId: user.id,
+        },
+      },
+      update: {},
+      create: {
+        organizationId: organization.id,
+        userId: user.id,
+        role: user.role === 'admin' ? 'owner' : 'member',
+        isDefault: true,
+      },
+    });
+  }
+  console.log('Added users to organization');
+
+  // Create default lead sources
+  console.log('Creating default lead sources...');
+  for (const source of defaultLeadSources) {
+    await prisma.leadSource.upsert({
+      where: {
+        organizationId_name: {
+          organizationId: organization.id,
+          name: source.name,
+        },
+      },
+      update: { sortOrder: source.sortOrder },
+      create: {
+        organizationId: organization.id,
+        name: source.name,
+        sortOrder: source.sortOrder,
+        isActive: true,
+      },
+    });
+    console.log(`  Created lead source: ${source.name}`);
+  }
+
   // Create bathroom pricing categories and items
   console.log('Creating bathroom pricing data...');
 
   // Check if pricing data already exists
-  const existingCategories = await prisma.pricingCategory.count();
+  const existingCategories = await prisma.pricingCategory.count({
+    where: { organizationId: organization.id },
+  });
   if (existingCategories > 0) {
     console.log('  Pricing data already exists, skipping...');
   } else {
@@ -233,6 +304,7 @@ async function main() {
 
       const category = await prisma.pricingCategory.create({
         data: {
+          organizationId: organization.id,
           name: cat.name,
           projectType: 'bathroom' as ProjectType,
           sortOrder: i,
@@ -285,6 +357,16 @@ async function main() {
       subject: 'Payment Received - {{projectName}}',
       body: 'We have received your payment of {{amount}} for {{projectName}}.',
     },
+    {
+      name: 'lead_assigned',
+      subject: 'New Lead Assigned - {{leadName}}',
+      body: 'You have been assigned a new lead: {{leadName}}. Project type: {{projectType}}.',
+    },
+    {
+      name: 'followup_reminder',
+      subject: 'Follow-up Reminder - {{leadName}}',
+      body: 'You have a follow-up scheduled for {{leadName}} on {{date}}.',
+    },
   ];
 
   for (const template of templates) {
@@ -296,7 +378,7 @@ async function main() {
   }
   console.log('Created notification templates');
 
-  // Create sample leads
+  // Create sample leads with new status values
   const sampleLeads = [
     {
       firstName: 'John',
@@ -307,8 +389,8 @@ async function main() {
       city: 'Austin',
       state: 'TX',
       zip: '78701',
-      source: 'referral',
-      status: 'qualified' as const,
+      source: 'Referral',
+      status: 'contacted' as LeadStatus,
       projectType: 'bathroom' as ProjectType,
       notes: 'Interested in master bathroom remodel',
     },
@@ -321,8 +403,8 @@ async function main() {
       city: 'Austin',
       state: 'TX',
       zip: '78702',
-      source: 'website',
-      status: 'new' as const,
+      source: 'Website',
+      status: 'new' as LeadStatus,
       projectType: 'kitchen' as ProjectType,
       notes: 'Looking for kitchen renovation quote',
     },
@@ -335,78 +417,130 @@ async function main() {
       city: 'Round Rock',
       state: 'TX',
       zip: '78664',
-      source: 'referral',
-      status: 'proposal' as const,
+      source: 'Referral',
+      status: 'pre_estimate' as LeadStatus,
+      subStatus: 'in_progress' as const,
       projectType: 'bathroom' as ProjectType,
       notes: 'Guest bathroom update, budget conscious',
+    },
+    {
+      firstName: 'Emily',
+      lastName: 'Davis',
+      email: 'emily.d@email.com',
+      phone: '(555) 456-7890',
+      address: '101 Cedar Lane',
+      city: 'Austin',
+      state: 'TX',
+      zip: '78703',
+      source: 'Phone Call',
+      status: 'on_hold' as LeadStatus,
+      followUpDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+      followUpReason: 'budget' as const,
+      projectType: 'bathroom' as ProjectType,
+      notes: 'Waiting on tax refund for budget',
     },
   ];
 
   console.log('Creating sample leads...');
   const createdLeads = [];
   for (const leadData of sampleLeads) {
-    const lead = await prisma.lead.create({
-      data: {
-        ...leadData,
-        designerId: designer.id,
+    const existingLead = await prisma.lead.findFirst({
+      where: {
+        email: leadData.email,
+        organizationId: organization.id,
       },
     });
-    createdLeads.push(lead);
-    console.log(`  Created lead: ${lead.firstName} ${lead.lastName}`);
+
+    if (!existingLead) {
+      const lead = await prisma.lead.create({
+        data: {
+          ...leadData,
+          organizationId: organization.id,
+          designerId: designer.id,
+        },
+      });
+      createdLeads.push(lead);
+      console.log(`  Created lead: ${lead.firstName} ${lead.lastName}`);
+
+      // Create history entry for lead creation
+      await prisma.leadHistory.create({
+        data: {
+          leadId: lead.id,
+          userId: designer.id,
+          eventType: 'created',
+          newValue: JSON.stringify({ status: lead.status }),
+          note: 'Lead created (seed data)',
+        },
+      });
+    } else {
+      createdLeads.push(existingLead);
+      console.log(`  Lead already exists: ${existingLead.firstName} ${existingLead.lastName}`);
+    }
   }
 
   // Create sample projects from leads
-  const sampleProjects = [
-    {
-      name: 'Smith Master Bath Remodel',
-      description: 'Complete master bathroom renovation including new tile, fixtures, and vanity',
-      status: 'in_progress' as const,
-      projectType: 'bathroom' as ProjectType,
-      leadIndex: 0,
-    },
-    {
-      name: 'Williams Guest Bath Update',
-      description: 'Guest bathroom refresh with new fixtures and paint',
-      status: 'pending_approval' as const,
-      projectType: 'bathroom' as ProjectType,
-      leadIndex: 2,
-    },
-  ];
-
-  console.log('Creating sample projects...');
-  for (const projectData of sampleProjects) {
-    const lead = createdLeads[projectData.leadIndex];
-    const project = await prisma.project.create({
-      data: {
-        name: projectData.name,
-        description: projectData.description,
-        status: projectData.status,
-        projectType: projectData.projectType,
-        designerId: designer.id,
-        leadId: lead.id,
-        address: lead.address,
-        city: lead.city,
-        state: lead.state,
-        zip: lead.zip,
+  if (createdLeads.length >= 3) {
+    const sampleProjects = [
+      {
+        name: 'Smith Master Bath Remodel',
+        description: 'Complete master bathroom renovation including new tile, fixtures, and vanity',
+        status: 'in_progress' as const,
+        projectType: 'bathroom' as ProjectType,
+        leadIndex: 0,
       },
-    });
-    console.log(`  Created project: ${project.name} (${project.id})`);
+      {
+        name: 'Williams Guest Bath Update',
+        description: 'Guest bathroom refresh with new fixtures and paint',
+        status: 'pending_approval' as const,
+        projectType: 'bathroom' as ProjectType,
+        leadIndex: 2,
+      },
+    ];
 
-    // Create a sample estimate for the first project
-    if (projectData.leadIndex === 0) {
-      const estimate = await prisma.estimate.create({
-        data: {
-          projectId: project.id,
-          version: 1,
-          name: 'Initial Estimate',
-          status: 'draft',
-          marginPercentage: 40,
-          subtotalContractor: 8500,
-          subtotalSelling: 14875,
-          total: 14875,
-        },
+    console.log('Creating sample projects...');
+    for (const projectData of sampleProjects) {
+      const lead = createdLeads[projectData.leadIndex];
+      if (!lead) continue;
+
+      const existingProject = await prisma.project.findFirst({
+        where: { leadId: lead.id },
       });
-      console.log(`  Created estimate: ${estimate.name} for ${project.name}`);
+
+      if (!existingProject) {
+        const project = await prisma.project.create({
+          data: {
+            organizationId: organization.id,
+            name: projectData.name,
+            description: projectData.description,
+            status: projectData.status,
+            projectType: projectData.projectType,
+            designerId: designer.id,
+            leadId: lead.id,
+            address: lead.address,
+            city: lead.city,
+            state: lead.state,
+            zip: lead.zip,
+          },
+        });
+        console.log(`  Created project: ${project.name} (${project.id})`);
+
+        // Create a sample estimate for the first project
+        if (projectData.leadIndex === 0) {
+          const estimate = await prisma.estimate.create({
+            data: {
+              projectId: project.id,
+              version: 1,
+              name: 'Initial Estimate',
+              status: 'draft',
+              marginPercentage: 40,
+              subtotalContractor: 8500,
+              subtotalSelling: 14875,
+              total: 14875,
+            },
+          });
+          console.log(`  Created estimate: ${estimate.name} for ${project.name}`);
+        }
+      }
     }
   }
 
