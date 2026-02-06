@@ -1,5 +1,5 @@
 import { formatDateTime, getEventTypeLabel, getLeadStatusLabel, cn } from '@/lib/utils';
-import type { LeadHistory, LeadPhoto } from '@/types';
+import type { LeadHistory } from '@/types';
 import {
   Clock,
   FileText,

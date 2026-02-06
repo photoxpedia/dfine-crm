@@ -498,3 +498,13 @@ export const reportsApi = {
   markProjectCompleted: (projectId: string) =>
     api.post(`/reports/projects/${projectId}/complete`),
 };
+
+// Users API
+export const usersApi = {
+  list: (params?: { role?: string; search?: string }) =>
+    api.get('/users', { params }),
+
+  get: (id: string) => api.get(`/users/${id}`),
+
+  getDesigners: () => api.get('/users', { params: { role: 'designer' } }),
+};

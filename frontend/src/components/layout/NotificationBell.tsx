@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Bell, Check, CheckCheck, Loader2 } from 'lucide-react';
 import { notificationsApi } from '@/lib/api';
-import { formatDateTime, cn, getBasePath } from '@/lib/utils';
+import { formatDateTime, cn } from '@/lib/utils';
 import type { Notification } from '@/types';
 
 interface NotificationBellProps {

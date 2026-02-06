@@ -4,11 +4,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ArrowLeft, Save, Loader2, Trash2, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { leadsApi } from '@/lib/api';
+import { leadsApi, leadSourcesApi } from '@/lib/api';
 import { formatStatus, getBasePath } from '@/lib/utils';
-import type { Lead, LeadStatus, ProjectType } from '@/types';
+import type { Lead, ProjectType, LeadSource } from '@/types';
 
 const leadSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
@@ -26,9 +26,7 @@ const leadSchema = z.object({
 
 type LeadFormData = z.infer<typeof leadSchema>;
 
-const STATUS_OPTIONS: LeadStatus[] = ['new', 'contacted', 'qualified', 'proposal', 'won', 'lost'];
 const PROJECT_TYPES: ProjectType[] = ['bathroom', 'kitchen', 'general'];
-const SOURCES = ['Referral', 'Website', 'Google', 'Social Media', 'Trade Show', 'Other'];
 
 export default function LeadFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -59,6 +57,17 @@ export default function LeadFormPage() {
     },
     enabled: isEditing,
   });
+
+  // Fetch lead sources
+  const { data: leadSourcesData } = useQuery({
+    queryKey: ['lead-sources'],
+    queryFn: async () => {
+      const response = await leadSourcesApi.list();
+      return response.data;
+    },
+  });
+
+  const leadSources = (leadSourcesData?.sources || []) as LeadSource[];
 
   // Reset form when lead data is loaded
   useEffect(() => {
@@ -124,32 +133,6 @@ export default function LeadFormPage() {
     },
   });
 
-  // Convert mutation
-  const convertMutation = useMutation({
-    mutationFn: async () => {
-      return leadsApi.convert(id!);
-    },
-    onSuccess: (response) => {
-      queryClient.invalidateQueries({ queryKey: ['leads'] });
-      toast.success('Lead converted to project!');
-      navigate(`${basePath}/projects/${response.data.id}`);
-    },
-    onError: () => {
-      toast.error('Failed to convert lead');
-    },
-  });
-
-  // Update status mutation
-  const updateStatusMutation = useMutation({
-    mutationFn: async (status: LeadStatus) => {
-      return leadsApi.updateStatus(id!, status);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lead', id] });
-      toast.success('Status updated');
-    },
-  });
-
   const onSubmit = (data: LeadFormData) => {
     if (isEditing) {
       updateMutation.mutate(data);
@@ -164,12 +147,6 @@ export default function LeadFormPage() {
     }
   };
 
-  const handleConvert = () => {
-    if (confirm('Convert this lead to a project?')) {
-      convertMutation.mutate();
-    }
-  };
-
   if (isEditing && isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -181,49 +158,16 @@ export default function LeadFormPage() {
   return (
     <div className="max-w-3xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <Link
-            to={`${basePath}/leads`}
-            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {isEditing ? `${lead?.firstName} ${lead?.lastName}` : 'New Lead'}
-          </h1>
-        </div>
-
-        {isEditing && (
-          <div className="flex items-center gap-2">
-            <select
-              value={lead?.status || 'new'}
-              onChange={(e) => updateStatusMutation.mutate(e.target.value as LeadStatus)}
-              className="input w-auto"
-            >
-              {STATUS_OPTIONS.map((status) => (
-                <option key={status} value={status}>
-                  {formatStatus(status)}
-                </option>
-              ))}
-            </select>
-
-            {lead?.status !== 'won' && lead?.status !== 'lost' && (
-              <button
-                onClick={handleConvert}
-                disabled={convertMutation.isPending}
-                className="btn btn-designer"
-              >
-                {convertMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <ArrowRight className="w-4 h-4 mr-2" />
-                )}
-                Convert to Project
-              </button>
-            )}
-          </div>
-        )}
+      <div className="flex items-center gap-4 mb-6">
+        <Link
+          to={isEditing ? `${basePath}/leads/${id}` : `${basePath}/leads`}
+          className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </Link>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {isEditing ? 'Edit Lead' : 'New Lead'}
+        </h1>
       </div>
 
       {/* Form */}
@@ -364,9 +308,9 @@ export default function LeadFormPage() {
               </label>
               <select {...register('source')} className="input">
                 <option value="">Select source...</option>
-                {SOURCES.map((source) => (
-                  <option key={source} value={source}>
-                    {source}
+                {leadSources.map((source) => (
+                  <option key={source.id} value={source.name}>
+                    {source.name}
                   </option>
                 ))}
               </select>

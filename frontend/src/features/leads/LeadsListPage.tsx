@@ -10,13 +10,25 @@ import {
   Mail,
   ArrowRight,
   Loader2,
+  CalendarClock,
+  Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { leadsApi } from '@/lib/api';
-import { formatDate, formatPhone, cn, getStatusColor, formatStatus, getBasePath } from '@/lib/utils';
-import type { Lead, LeadStatus, ProjectType } from '@/types';
+import { leadsApi, dashboardApi } from '@/lib/api';
+import { formatDate, formatPhone, cn, getStatusColor, getLeadStatusLabel, getBasePath } from '@/lib/utils';
+import { StatusChangeModal } from './components';
+import type { Lead, LeadStatus, ProjectType, SubStatus, FollowUpReason } from '@/types';
 
-const STATUS_OPTIONS: LeadStatus[] = ['new', 'contacted', 'qualified', 'proposal', 'won', 'lost'];
+const STATUS_OPTIONS: LeadStatus[] = [
+  'new',
+  'contacted',
+  'pre_estimate',
+  'estimated',
+  'converted',
+  'on_hold',
+  'future_client',
+  'dropped',
+];
 const PROJECT_TYPES: ProjectType[] = ['bathroom', 'kitchen', 'general'];
 
 export default function LeadsListPage() {
@@ -30,7 +42,10 @@ export default function LeadsListPage() {
   const [projectTypeFilter, setProjectTypeFilter] = useState<ProjectType | ''>('');
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [showStatusModal, setShowStatusModal] = useState(false);
 
+  // Get leads
   const { data, isLoading } = useQuery({
     queryKey: ['leads', { search, status: statusFilter, projectType: projectTypeFilter, page }],
     queryFn: async () => {
@@ -45,13 +60,43 @@ export default function LeadsListPage() {
     },
   });
 
+  // Get today's follow-ups for highlighting
+  const { data: todayFollowups } = useQuery({
+    queryKey: ['dashboard', 'followups', 'today'],
+    queryFn: async () => {
+      const response = await dashboardApi.getTodayFollowups();
+      return response.data;
+    },
+  });
+
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: LeadStatus }) => {
-      return leadsApi.updateStatus(id, status);
+    mutationFn: async (data: {
+      id: string;
+      status: LeadStatus;
+      subStatus?: SubStatus;
+      note: string;
+      followUpDate?: string;
+      followUpReason?: FollowUpReason;
+      followUpReasonOther?: string;
+    }) => {
+      return leadsApi.updateStatus(data.id, {
+        status: data.status,
+        subStatus: data.subStatus,
+        note: data.note,
+        followUpDate: data.followUpDate,
+        followUpReason: data.followUpReason,
+        followUpReasonOther: data.followUpReasonOther,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       toast.success('Status updated');
+      setShowStatusModal(false);
+      setSelectedLead(null);
+    },
+    onError: () => {
+      toast.error('Failed to update status');
     },
   });
 
@@ -68,6 +113,12 @@ export default function LeadsListPage() {
 
   const leads = data?.leads || [];
   const pagination = data?.pagination;
+  const todayLeadIds = new Set(todayFollowups?.leadIds || []);
+
+  const handleStatusChange = (lead: Lead) => {
+    setSelectedLead(lead);
+    setShowStatusModal(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -127,7 +178,7 @@ export default function LeadsListPage() {
                 <option value="">All Statuses</option>
                 {STATUS_OPTIONS.map((status) => (
                   <option key={status} value={status}>
-                    {formatStatus(status)}
+                    {getLeadStatusLabel(status)}
                   </option>
                 ))}
               </select>
@@ -141,8 +192,8 @@ export default function LeadsListPage() {
               >
                 <option value="">All Types</option>
                 {PROJECT_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {formatStatus(type)}
+                  <option key={type} value={type} className="capitalize">
+                    {type.charAt(0).toUpperCase() + type.slice(1)}
                   </option>
                 ))}
               </select>
@@ -159,7 +210,7 @@ export default function LeadsListPage() {
       ) : leads.length === 0 ? (
         <div className="card p-12 text-center">
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Search className="w-8 h-8 text-gray-400" />
+            <Users className="w-8 h-8 text-gray-400" />
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No leads found</h3>
           <p className="text-gray-500 mb-4">
@@ -192,9 +243,8 @@ export default function LeadsListPage() {
                     key={lead.id}
                     lead={lead}
                     basePath={basePath}
-                    onStatusChange={(status) =>
-                      updateStatusMutation.mutate({ id: lead.id, status })
-                    }
+                    isFollowUpToday={todayLeadIds.has(lead.id)}
+                    onStatusChange={() => handleStatusChange(lead)}
                     onConvert={() => convertMutation.mutate(lead.id)}
                   />
                 ))}
@@ -229,6 +279,25 @@ export default function LeadsListPage() {
           )}
         </div>
       )}
+
+      {/* Status Change Modal */}
+      {showStatusModal && selectedLead && (
+        <StatusChangeModal
+          currentStatus={selectedLead.status}
+          currentSubStatus={selectedLead.subStatus}
+          onClose={() => {
+            setShowStatusModal(false);
+            setSelectedLead(null);
+          }}
+          onSubmit={(data) => {
+            updateStatusMutation.mutate({
+              id: selectedLead.id,
+              ...data,
+            });
+          }}
+          isLoading={updateStatusMutation.isPending}
+        />
+      )}
     </div>
   );
 }
@@ -236,31 +305,47 @@ export default function LeadsListPage() {
 function LeadRow({
   lead,
   basePath,
+  isFollowUpToday,
   onStatusChange,
   onConvert,
 }: {
   lead: Lead;
   basePath: string;
-  onStatusChange: (status: LeadStatus) => void;
+  isFollowUpToday: boolean;
+  onStatusChange: () => void;
   onConvert: () => void;
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const navigate = useNavigate();
 
+  const canConvert = !['converted', 'dropped'].includes(lead.status);
+
   return (
     <tr
-      className="cursor-pointer"
+      className={cn(
+        'cursor-pointer',
+        isFollowUpToday && 'bg-yellow-50 hover:bg-yellow-100'
+      )}
       onClick={() => navigate(`${basePath}/leads/${lead.id}`)}
     >
       <td>
-        <p className="font-medium text-gray-900">
-          {lead.firstName} {lead.lastName}
-        </p>
-        {lead.address && (
-          <p className="text-sm text-gray-500 truncate max-w-xs">
-            {lead.address}, {lead.city}
-          </p>
-        )}
+        <div className="flex items-center gap-2">
+          <div>
+            <p className="font-medium text-gray-900">
+              {lead.firstName} {lead.lastName}
+            </p>
+            {lead.address && (
+              <p className="text-sm text-gray-500 truncate max-w-xs">
+                {lead.address}, {lead.city}
+              </p>
+            )}
+          </div>
+          {isFollowUpToday && (
+            <span title="Follow-up due today">
+              <CalendarClock className="w-4 h-4 text-yellow-600" />
+            </span>
+          )}
+        </div>
       </td>
       <td onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3">
@@ -288,20 +373,15 @@ function LeadRow({
         <span className="capitalize text-sm">{lead.projectType}</span>
       </td>
       <td onClick={(e) => e.stopPropagation()}>
-        <select
-          value={lead.status}
-          onChange={(e) => onStatusChange(e.target.value as LeadStatus)}
+        <button
+          onClick={onStatusChange}
           className={cn(
-            'text-xs font-medium px-2 py-1 rounded-full border-0 cursor-pointer',
+            'text-xs font-medium px-2 py-1 rounded-full border-0 cursor-pointer hover:opacity-80 transition-opacity',
             getStatusColor(lead.status)
           )}
         >
-          {STATUS_OPTIONS.map((status) => (
-            <option key={status} value={status}>
-              {formatStatus(status)}
-            </option>
-          ))}
-        </select>
+          {getLeadStatusLabel(lead.status, lead.subStatus)}
+        </button>
       </td>
       <td className="text-sm text-gray-500">
         {formatDate(lead.createdAt)}
@@ -328,7 +408,16 @@ function LeadRow({
                 >
                   View Details
                 </button>
-                {lead.status !== 'won' && lead.status !== 'lost' && (
+                <button
+                  onClick={() => {
+                    onStatusChange();
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Change Status
+                </button>
+                {canConvert && (
                   <button
                     onClick={() => {
                       onConvert();
