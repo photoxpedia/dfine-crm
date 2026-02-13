@@ -1,8 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import fs from 'fs';
 import prisma from '../config/database.js';
 import { authenticate, requireDesignerOrAdmin } from '../middleware/auth.js';
-import { TaskStatus, TaskPriority, Prisma } from '@prisma/client';
+import { TaskStatus, TaskPriority, ChangeOrderStatus, Prisma } from '@prisma/client';
+import { uploadProjectPhotos, getRelativePath, getFullPath } from '../config/upload.js';
 
 const router = Router();
 
@@ -443,6 +445,293 @@ router.delete('/:projectId/daily-logs/:logId', authenticate, requireDesignerOrAd
   });
 
   res.json({ message: 'Daily log deleted' });
+});
+
+// ==================== CHANGE ORDERS ====================
+
+const createChangeOrderSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+  description: z.string().min(1, 'Description is required'),
+  reason: z.string().optional(),
+  costImpact: z.number().optional(),
+  scheduleImpact: z.string().optional(),
+});
+
+// List change orders for a project
+router.get('/:projectId/change-orders', authenticate, async (req: Request, res: Response) => {
+  const { projectId } = req.params;
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { designerId: true, clientId: true },
+  });
+
+  if (!project) {
+    res.status(404).json({ error: 'Project not found' });
+    return;
+  }
+
+  if (
+    req.user!.role === 'designer' && project.designerId !== req.user!.id ||
+    req.user!.role === 'client' && project.clientId !== req.user!.id
+  ) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  const changeOrders = await prisma.changeOrder.findMany({
+    where: { projectId },
+    include: {
+      createdBy: { select: { id: true, name: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const totalCostImpact = changeOrders
+    .filter((co) => co.status === 'approved')
+    .reduce((sum, co) => sum + Number(co.costImpact), 0);
+
+  res.json({ changeOrders, totalCostImpact });
+});
+
+// Create change order
+router.post('/:projectId/change-orders', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+  const { projectId } = req.params;
+
+  const result = createChangeOrderSchema.safeParse(req.body);
+  if (!result.success) {
+    res.status(400).json({ error: result.error.errors[0].message });
+    return;
+  }
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { designerId: true },
+  });
+
+  if (!project) {
+    res.status(404).json({ error: 'Project not found' });
+    return;
+  }
+
+  if (req.user!.role === 'designer' && project.designerId !== req.user!.id) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  const changeOrder = await prisma.changeOrder.create({
+    data: {
+      projectId,
+      createdById: req.user!.id,
+      title: result.data.title,
+      description: result.data.description,
+      reason: result.data.reason || null,
+      costImpact: result.data.costImpact || 0,
+      scheduleImpact: result.data.scheduleImpact || null,
+    },
+    include: {
+      createdBy: { select: { id: true, name: true } },
+    },
+  });
+
+  res.status(201).json(changeOrder);
+});
+
+// Update change order status
+router.patch('/:projectId/change-orders/:coId/status', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+  const { projectId, coId } = req.params;
+  const { status, rejectionNote } = req.body;
+
+  const changeOrder = await prisma.changeOrder.findFirst({
+    where: { id: coId, projectId },
+    include: { project: { select: { designerId: true } } },
+  });
+
+  if (!changeOrder) {
+    res.status(404).json({ error: 'Change order not found' });
+    return;
+  }
+
+  const updateData: any = { status };
+
+  if (status === 'pending_approval') {
+    updateData.submittedAt = new Date();
+  } else if (status === 'approved') {
+    updateData.approvedAt = new Date();
+    updateData.approvedBy = req.user!.name || req.user!.email;
+  } else if (status === 'rejected') {
+    updateData.rejectedAt = new Date();
+    updateData.rejectionNote = rejectionNote || null;
+  }
+
+  const updated = await prisma.changeOrder.update({
+    where: { id: coId },
+    data: updateData,
+    include: {
+      createdBy: { select: { id: true, name: true } },
+    },
+  });
+
+  res.json(updated);
+});
+
+// Delete change order (drafts only)
+router.delete('/:projectId/change-orders/:coId', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+  const { projectId, coId } = req.params;
+
+  const changeOrder = await prisma.changeOrder.findFirst({
+    where: { id: coId, projectId },
+    include: { project: { select: { designerId: true } } },
+  });
+
+  if (!changeOrder) {
+    res.status(404).json({ error: 'Change order not found' });
+    return;
+  }
+
+  if (changeOrder.status !== 'draft') {
+    res.status(400).json({ error: 'Can only delete draft change orders' });
+    return;
+  }
+
+  await prisma.changeOrder.delete({ where: { id: coId } });
+  res.json({ message: 'Change order deleted' });
+});
+
+// ==================== PROJECT PHOTOS ====================
+
+// List photos for a project
+router.get('/:projectId/photos', authenticate, async (req: Request, res: Response) => {
+  const { projectId } = req.params;
+  const { folder } = req.query;
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { designerId: true, clientId: true },
+  });
+
+  if (!project) {
+    res.status(404).json({ error: 'Project not found' });
+    return;
+  }
+
+  if (
+    req.user!.role === 'designer' && project.designerId !== req.user!.id ||
+    req.user!.role === 'client' && project.clientId !== req.user!.id
+  ) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  const where: any = { projectId };
+  if (folder) where.folder = folder as string;
+
+  const photos = await prisma.projectPhoto.findMany({
+    where,
+    include: {
+      user: { select: { id: true, name: true } },
+    },
+    orderBy: [{ folder: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
+  });
+
+  // Group by folder for summary
+  const folderCounts: Record<string, number> = {};
+  for (const photo of photos) {
+    folderCounts[photo.folder] = (folderCounts[photo.folder] || 0) + 1;
+  }
+
+  res.json({ photos, folderCounts });
+});
+
+// Upload photos to a project
+router.post(
+  '/:projectId/photos',
+  authenticate,
+  requireDesignerOrAdmin,
+  uploadProjectPhotos.array('photos', 20),
+  async (req: Request, res: Response) => {
+    const { projectId } = req.params;
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { designerId: true },
+    });
+
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+
+    if (req.user!.role === 'designer' && project.designerId !== req.user!.id) {
+      res.status(403).json({ error: 'Access denied' });
+      return;
+    }
+
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      res.status(400).json({ error: 'No files uploaded' });
+      return;
+    }
+
+    const folder = req.body.folder || 'general';
+    const caption = req.body.caption || null;
+
+    const photos = await Promise.all(
+      files.map(async (file) => {
+        return prisma.projectPhoto.create({
+          data: {
+            projectId,
+            userId: req.user!.id,
+            filePath: getRelativePath(file.path),
+            fileName: file.originalname,
+            fileSize: file.size,
+            mimeType: file.mimetype,
+            folder,
+            caption,
+          },
+          include: {
+            user: { select: { id: true, name: true } },
+          },
+        });
+      })
+    );
+
+    res.status(201).json(photos);
+  }
+);
+
+// Delete a project photo
+router.delete('/:projectId/photos/:photoId', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+  const { projectId, photoId } = req.params;
+
+  const photo = await prisma.projectPhoto.findFirst({
+    where: { id: photoId, projectId },
+    include: { project: { select: { designerId: true } } },
+  });
+
+  if (!photo) {
+    res.status(404).json({ error: 'Photo not found' });
+    return;
+  }
+
+  if (req.user!.role === 'designer' && photo.project.designerId !== req.user!.id) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  // Delete file from disk
+  try {
+    const fullPath = getFullPath(photo.filePath);
+    if (fs.existsSync(fullPath)) {
+      fs.unlinkSync(fullPath);
+    }
+  } catch (error) {
+    console.error('Error deleting photo file:', error);
+  }
+
+  await prisma.projectPhoto.delete({ where: { id: photoId } });
+
+  res.json({ message: 'Photo deleted' });
 });
 
 export default router;

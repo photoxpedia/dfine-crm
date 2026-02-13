@@ -75,19 +75,36 @@ export default function LineItemRow({
 
         {/* Item name */}
         <div className="flex-1 min-w-0">
-          {isEditable ? (
-            <input
-              type="text"
-              value={item.name}
-              onChange={(e) => onUpdate(item.id, { name: e.target.value })}
-              className="w-full text-sm font-medium text-gray-900 bg-transparent border-0 p-0 focus:ring-0 focus:outline-none"
-              placeholder="Item name"
-            />
-          ) : (
-            <p className="text-sm font-medium text-gray-900 truncate">{item.name}</p>
-          )}
+          <div className="flex items-center gap-1.5">
+            {isEditable ? (
+              <input
+                type="text"
+                value={item.name}
+                onChange={(e) => onUpdate(item.id, { name: e.target.value })}
+                className="w-full text-sm font-medium text-gray-900 bg-transparent border-0 p-0 focus:ring-0 focus:outline-none"
+                placeholder="Item name"
+              />
+            ) : (
+              <p className="text-sm font-medium text-gray-900 truncate">{item.name}</p>
+            )}
+            {item.productUrl && (
+              <a
+                href={item.productUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="flex-shrink-0 text-designer-500 hover:text-designer-700"
+                title="View Product"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
+          </div>
           {item.isCustom && (
             <span className="text-xs text-designer-600">(Custom)</span>
+          )}
+          {item.description && !isExpanded && (
+            <p className="text-xs text-gray-400 truncate">{item.description}</p>
           )}
         </div>
 

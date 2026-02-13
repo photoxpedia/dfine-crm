@@ -90,6 +90,9 @@ export const leadsApi = {
   addNote: (id: string, note: string) =>
     api.post(`/leads/${id}/notes`, { note }),
 
+  logContact: (id: string, contactType: string, note: string) =>
+    api.post(`/leads/${id}/contact`, { contactType, note }),
+
   getHistory: (id: string, params?: { limit?: number; offset?: number }) =>
     api.get(`/leads/${id}/history`, { params }),
 
@@ -214,6 +217,23 @@ export const estimatesApi = {
 
   duplicate: (estimateId: string) =>
     api.post(`/estimates/${estimateId}/duplicate`),
+
+  duplicateToProject: (estimateId: string, targetProjectId: string) =>
+    api.post(`/estimates/${estimateId}/duplicate-to/${targetProjectId}`),
+
+  listRecent: (excludeProjectId?: string) =>
+    api.get('/estimates/recent', { params: { excludeProjectId } }),
+
+  applyDiscount: (estimateId: string, discountType: 'percentage' | 'fixed' | null, discountValue: number) =>
+    api.post(`/estimates/${estimateId}/discount`, { discountType, discountValue }),
+
+  updateSettings: (estimateId: string, data: {
+    scopeOfWork?: string;
+    countyLicensing?: boolean;
+    projectStartDate?: string;
+    notes?: string;
+    validUntil?: string;
+  }) => api.put(`/estimates/${estimateId}/settings`, data),
 
   // Finalization & Approval
   finalize: (estimateId: string, sendEmail = true) =>
@@ -471,6 +491,36 @@ export const projectManagementApi = {
 
   deleteDailyLog: (projectId: string, logId: string) =>
     api.delete(`/projects/${projectId}/daily-logs/${logId}`),
+
+  // Photos
+  getPhotos: (projectId: string, folder?: string) =>
+    api.get(`/projects/${projectId}/photos`, { params: folder ? { folder } : {} }),
+
+  uploadPhotos: (projectId: string, formData: FormData) =>
+    api.post(`/projects/${projectId}/photos`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
+  deletePhoto: (projectId: string, photoId: string) =>
+    api.delete(`/projects/${projectId}/photos/${photoId}`),
+
+  // Change Orders
+  listChangeOrders: (projectId: string) =>
+    api.get(`/projects/${projectId}/change-orders`),
+
+  createChangeOrder: (projectId: string, data: {
+    title: string;
+    description: string;
+    reason?: string;
+    costImpact?: number;
+    scheduleImpact?: string;
+  }) => api.post(`/projects/${projectId}/change-orders`, data),
+
+  updateChangeOrderStatus: (projectId: string, coId: string, status: string, rejectionNote?: string) =>
+    api.patch(`/projects/${projectId}/change-orders/${coId}/status`, { status, rejectionNote }),
+
+  deleteChangeOrder: (projectId: string, coId: string) =>
+    api.delete(`/projects/${projectId}/change-orders/${coId}`),
 };
 
 // Materials API

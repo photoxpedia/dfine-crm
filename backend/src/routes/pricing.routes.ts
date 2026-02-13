@@ -32,6 +32,16 @@ router.get('/categories', authenticate, requireDesignerOrAdmin, async (req: Requ
   const { projectType, includeItems } = req.query;
 
   const where: any = { isActive: true }; // Only return active categories
+
+  // Organization scoping
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (userOrg) {
+    where.organizationId = userOrg.organizationId;
+  }
+
   if (projectType) {
     where.projectType = projectType as ProjectType;
   }
@@ -68,6 +78,16 @@ router.get('/categories/:id', authenticate, requireDesignerOrAdmin, async (req: 
 router.post('/categories', authenticate, requireAdmin, async (req: Request, res: Response) => {
   const data = categorySchema.parse(req.body);
 
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
   const maxOrder = await prisma.pricingCategory.aggregate({
     where: { projectType: data.projectType },
     _max: { sortOrder: true },
@@ -77,6 +97,7 @@ router.post('/categories', authenticate, requireAdmin, async (req: Request, res:
     data: {
       ...data,
       sortOrder: data.sortOrder ?? (maxOrder._max.sortOrder || 0) + 1,
+      organizationId: userOrg.organizationId,
     },
   });
 
@@ -252,6 +273,16 @@ router.post('/import', authenticate, requireAdmin, async (req: Request, res: Res
     return;
   }
 
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
   const results = {
     categoriesCreated: 0,
     itemsCreated: 0,
@@ -275,6 +306,7 @@ router.post('/import', authenticate, requireAdmin, async (req: Request, res: Res
             description: cat.description,
             projectType: cat.projectType,
             sortOrder: cat.sortOrder || 0,
+            organizationId: userOrg.organizationId,
           },
         });
         results.categoriesCreated++;

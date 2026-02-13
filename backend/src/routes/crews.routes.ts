@@ -24,6 +24,15 @@ router.get('/', authenticate, requireDesignerOrAdmin, async (req: Request, res: 
 
   const where: any = {};
 
+  // Organization scoping
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (userOrg) {
+    where.organizationId = userOrg.organizationId;
+  }
+
   if (isActive !== undefined) {
     where.isActive = isActive === 'true';
   }
@@ -85,6 +94,16 @@ router.get('/:id', authenticate, requireDesignerOrAdmin, async (req: Request, re
 router.post('/', authenticate, requireAdmin, async (req: Request, res: Response) => {
   const data = createCrewSchema.parse(req.body);
 
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
   const crew = await prisma.crew.create({
     data: {
       name: data.name,
@@ -95,6 +114,7 @@ router.post('/', authenticate, requireAdmin, async (req: Request, res: Response)
       hourlyRate: data.hourlyRate,
       dailyRate: data.dailyRate,
       notes: data.notes,
+      organizationId: userOrg.organizationId,
     },
   });
 

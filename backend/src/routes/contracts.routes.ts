@@ -51,6 +51,16 @@ router.get('/templates', authenticate, requireDesignerOrAdmin, async (req: Reque
   const { activeOnly } = req.query;
 
   const where: any = {};
+
+  // Organization scoping
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (userOrg) {
+    where.organizationId = userOrg.organizationId;
+  }
+
   if (activeOnly === 'true') {
     where.isActive = true;
   }
@@ -112,6 +122,17 @@ router.post('/templates', authenticate, requireAdmin, upload.single('pdf'), asyn
       });
     }
 
+    // Get user's organization
+    const userOrg = await prisma.organizationMember.findFirst({
+      where: { userId: req.user!.id, isDefault: true },
+      select: { organizationId: true },
+    });
+
+    if (!userOrg) {
+      res.status(400).json({ error: 'User must belong to an organization' });
+      return;
+    }
+
     const template = await prisma.contractTemplate.create({
       data: {
         name,
@@ -119,6 +140,7 @@ router.post('/templates', authenticate, requireAdmin, upload.single('pdf'), asyn
         pdfUrl: `/uploads/contracts/${req.file.filename}`,
         fieldMappings: parsedFieldMappings,
         isDefault: isDefault === 'true',
+        organizationId: userOrg.organizationId,
       },
     });
 

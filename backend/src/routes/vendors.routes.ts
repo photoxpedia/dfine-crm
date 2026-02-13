@@ -22,6 +22,15 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
 
   const where: any = {};
 
+  // Organization scoping
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (userOrg) {
+    where.organizationId = userOrg.organizationId;
+  }
+
   if (search) {
     where.OR = [
       { name: { contains: search as string, mode: 'insensitive' } },
@@ -67,11 +76,22 @@ router.get('/:id', authenticate, async (req: Request, res: Response) => {
 router.post('/', authenticate, requireAdmin, async (req: Request, res: Response) => {
   const data = vendorSchema.parse(req.body);
 
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
   const vendor = await prisma.vendor.create({
     data: {
       ...data,
       email: data.email || null,
       website: data.website || null,
+      organizationId: userOrg.organizationId,
     },
   });
 

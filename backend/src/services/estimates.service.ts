@@ -342,17 +342,65 @@ export async function recalculateTotals(estimateId: string) {
     totalSelling += sectionSelling;
   }
 
+  // Calculate discount
+  let discountAmount = 0;
+  const discountType = estimate.discountType;
+  const discountValue = decimalToNumber(estimate.discountValue);
+
+  if (discountType === 'percentage' && discountValue > 0) {
+    discountAmount = totalSelling * (discountValue / 100);
+  } else if (discountType === 'fixed' && discountValue > 0) {
+    discountAmount = discountValue;
+  }
+
+  const finalTotal = Math.max(0, totalSelling - discountAmount);
+
   // Update estimate totals
   await prisma.estimate.update({
     where: { id: estimateId },
     data: {
       subtotalContractor: toDecimal(totalContractor),
       subtotalSelling: toDecimal(totalSelling),
-      total: toDecimal(totalSelling),
+      discountAmount: toDecimal(discountAmount),
+      total: toDecimal(finalTotal),
     },
   });
 
   return getEstimate(estimateId);
+}
+
+// Apply discount to estimate
+export async function applyDiscount(
+  estimateId: string,
+  discountType: 'percentage' | 'fixed' | null,
+  discountValue: number
+) {
+  await prisma.estimate.update({
+    where: { id: estimateId },
+    data: {
+      discountType,
+      discountValue: discountType ? toDecimal(discountValue) : null,
+    },
+  });
+
+  return recalculateTotals(estimateId);
+}
+
+// Update estimate settings (scope of work, county licensing, etc.)
+export async function updateEstimateSettings(
+  estimateId: string,
+  data: {
+    scopeOfWork?: string;
+    countyLicensing?: boolean;
+    projectStartDate?: Date | null;
+    notes?: string;
+    validUntil?: Date | null;
+  }
+) {
+  return prisma.estimate.update({
+    where: { id: estimateId },
+    data,
+  });
 }
 
 // Apply a new margin percentage to all items
@@ -416,12 +464,13 @@ export async function updateEstimateStatus(estimateId: string, status: EstimateS
 }
 
 // Duplicate an estimate (for new version)
-export async function duplicateEstimate(estimateId: string) {
+export async function duplicateEstimate(estimateId: string, targetProjectId?: string) {
   const original = await getEstimate(estimateId);
   if (!original) throw new Error('Estimate not found');
 
+  const projectId = targetProjectId || original.projectId;
   const newEstimate = await createEstimate(
-    original.projectId,
+    projectId,
     decimalToNumber(original.marginPercentage)
   );
 
@@ -444,6 +493,22 @@ export async function duplicateEstimate(estimateId: string) {
       });
     }
   }
+
+  // Copy discount settings
+  if (original.discountType) {
+    await applyDiscount(
+      newEstimate.id,
+      original.discountType as 'percentage' | 'fixed',
+      decimalToNumber(original.discountValue)
+    );
+  }
+
+  // Copy other settings
+  await updateEstimateSettings(newEstimate.id, {
+    scopeOfWork: original.scopeOfWork || undefined,
+    countyLicensing: original.countyLicensing,
+    notes: original.notes || undefined,
+  });
 
   return getEstimate(newEstimate.id);
 }

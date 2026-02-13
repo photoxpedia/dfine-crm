@@ -33,13 +33,22 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
 
   const where: any = {};
 
+  // Organization scoping
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (userOrg) {
+    where.organizationId = userOrg.organizationId;
+  }
+
   // Role-based filtering
   if (req.user!.role === 'designer') {
     where.designerId = req.user!.id;
   } else if (req.user!.role === 'client') {
     where.clientId = req.user!.id;
   }
-  // Admin sees all
+  // Admin sees all within org
 
   if (status) {
     where.status = status as ProjectStatus;
@@ -165,9 +174,20 @@ router.get('/:id', authenticate, async (req: Request, res: Response) => {
 router.post('/', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
   const data = createProjectSchema.parse(req.body);
 
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
   const project = await prisma.project.create({
     data: {
       ...data,
+      organizationId: userOrg.organizationId,
       designerId: req.user!.id,
       startDate: data.startDate ? new Date(data.startDate) : null,
       endDate: data.endDate ? new Date(data.endDate) : null,

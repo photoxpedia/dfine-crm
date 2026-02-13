@@ -21,12 +21,45 @@ const addLineItemSchema = z.object({
   quantity: z.coerce.number().min(0).optional(),
   contractorCost: z.coerce.number().min(0).optional(),
   sellingPrice: z.coerce.number().min(0).optional(),
-  productUrl: z.string().url().optional().nullable().transform(nullToUndefined),
-  imageUrl: z.string().url().optional().nullable().transform(nullToUndefined),
+  productUrl: z.string().optional().nullable().transform((val) => {
+    if (!val || val.trim() === '') return undefined;
+    return val;
+  }),
+  imageUrl: z.string().optional().nullable().transform((val) => {
+    if (!val || val.trim() === '') return undefined;
+    return val;
+  }),
   notes: z.string().optional().nullable().transform(nullToUndefined),
 });
 
 const updateLineItemSchema = addLineItemSchema.partial();
+
+// List recent estimates across all projects (for copy-from picker)
+router.get('/recent', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+  const { excludeProjectId } = req.query;
+
+  const where: any = {};
+
+  if (req.user!.role === 'designer') {
+    where.project = { designerId: req.user!.id };
+  }
+
+  if (excludeProjectId) {
+    where.projectId = { not: excludeProjectId as string };
+  }
+
+  const estimates = await prisma.estimate.findMany({
+    where,
+    include: {
+      project: { select: { id: true, name: true, projectType: true } },
+      _count: { select: { sections: true } },
+    },
+    orderBy: { updatedAt: 'desc' },
+    take: 20,
+  });
+
+  res.json({ estimates });
+});
 
 // List estimates for a project
 router.get('/project/:projectId', authenticate, async (req: Request, res: Response) => {
@@ -298,6 +331,62 @@ router.post('/:id/apply-margin', authenticate, requireDesignerOrAdmin, async (re
   res.json(estimate);
 });
 
+// Apply discount
+router.post('/:id/discount', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+  const { discountType, discountValue } = req.body;
+
+  const estimate = await estimatesService.getEstimate(req.params.id);
+  if (!estimate) {
+    res.status(404).json({ error: 'Estimate not found' });
+    return;
+  }
+
+  if (req.user!.role === 'designer' && estimate.project.designerId !== req.user!.id) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  if (discountType && !['percentage', 'fixed'].includes(discountType)) {
+    res.status(400).json({ error: 'Invalid discount type' });
+    return;
+  }
+
+  const result = await estimatesService.applyDiscount(
+    req.params.id,
+    discountType || null,
+    parseFloat(discountValue) || 0
+  );
+
+  res.json(result);
+});
+
+// Update estimate settings (scope of work, county licensing, etc.)
+router.put('/:id/settings', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+  const { scopeOfWork, countyLicensing, projectStartDate, notes, validUntil } = req.body;
+
+  const estimate = await estimatesService.getEstimate(req.params.id);
+  if (!estimate) {
+    res.status(404).json({ error: 'Estimate not found' });
+    return;
+  }
+
+  if (req.user!.role === 'designer' && estimate.project.designerId !== req.user!.id) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  await estimatesService.updateEstimateSettings(req.params.id, {
+    scopeOfWork,
+    countyLicensing,
+    projectStartDate: projectStartDate ? new Date(projectStartDate) : undefined,
+    notes,
+    validUntil: validUntil ? new Date(validUntil) : undefined,
+  });
+
+  const updated = await estimatesService.getEstimate(req.params.id);
+  res.json(updated);
+});
+
 // Update estimate status
 router.patch('/:id/status', authenticate, async (req: Request, res: Response) => {
   const { status } = z.object({ status: z.nativeEnum(EstimateStatus) }).parse(req.body);
@@ -343,6 +432,40 @@ router.post('/:id/duplicate', authenticate, requireDesignerOrAdmin, async (req: 
   }
 
   const newEstimate = await estimatesService.duplicateEstimate(req.params.id);
+  res.status(201).json(newEstimate);
+});
+
+// Duplicate estimate to another project
+router.post('/:id/duplicate-to/:projectId', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+  const estimate = await estimatesService.getEstimate(req.params.id);
+  if (!estimate) {
+    res.status(404).json({ error: 'Estimate not found' });
+    return;
+  }
+
+  // Check source access
+  if (req.user!.role === 'designer' && estimate.project.designerId !== req.user!.id) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  // Check target project access
+  const targetProject = await prisma.project.findUnique({
+    where: { id: req.params.projectId },
+    select: { designerId: true },
+  });
+
+  if (!targetProject) {
+    res.status(404).json({ error: 'Target project not found' });
+    return;
+  }
+
+  if (req.user!.role === 'designer' && targetProject.designerId !== req.user!.id) {
+    res.status(403).json({ error: 'Access denied to target project' });
+    return;
+  }
+
+  const newEstimate = await estimatesService.duplicateEstimate(req.params.id, req.params.projectId);
   res.status(201).json(newEstimate);
 });
 
@@ -411,6 +534,16 @@ router.post('/:id/finalize', authenticate, requireDesignerOrAdmin, async (req: R
   const hasItems = estimate.sections.some((s: { lineItems: unknown[] }) => s.lineItems.length > 0);
   if (!hasItems) {
     res.status(400).json({ error: 'Estimate must have at least one line item' });
+    return;
+  }
+
+  // Allow re-sending rejected estimates
+  if (estimate.status === 'rejected' || estimate.status === 'draft') {
+    // OK to proceed
+  } else if (estimate.status === 'sent' || estimate.status === 'viewed') {
+    // Allow resending
+  } else {
+    res.status(400).json({ error: 'Estimate cannot be finalized in its current status' });
     return;
   }
 

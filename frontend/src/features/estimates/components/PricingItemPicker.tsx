@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { X, Search, ChevronRight, Check, Plus } from 'lucide-react';
+import { X, Search, ChevronRight, Check, Plus, ArrowLeft } from 'lucide-react';
 import { pricingApi } from '@/lib/api';
 import { formatCurrency, cn } from '@/lib/utils';
-import type { PricingCategory, PricingItem, ProjectType } from '@/types';
+import type { PricingCategory, PricingItem, ProjectType, UnitOfMeasure } from '@/types';
+
+const UNITS: UnitOfMeasure[] = ['EA', 'LF', 'SF', 'SQ', 'PC'];
 
 interface PricingItemPickerProps {
   isOpen: boolean;
@@ -21,6 +23,13 @@ export default function PricingItemPicker({
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedItems, setSelectedItems] = useState<Map<string, PricingItem>>(new Map());
+  const [showCustomForm, setShowCustomForm] = useState(false);
+  const [customName, setCustomName] = useState('');
+  const [customDescription, setCustomDescription] = useState('');
+  const [customUnit, setCustomUnit] = useState<UnitOfMeasure>('EA');
+  const [customCost, setCustomCost] = useState('');
+  const [customPrice, setCustomPrice] = useState('');
+  const [customProductUrl, setCustomProductUrl] = useState('');
 
   const { data: categories, isLoading } = useQuery({
     queryKey: ['pricing-categories', projectType],
@@ -39,8 +48,19 @@ export default function PricingItemPicker({
       setSearch('');
       setSelectedCategory(null);
       setSelectedItems(new Map());
+      setShowCustomForm(false);
+      resetCustomForm();
     }
   }, [isOpen]);
+
+  const resetCustomForm = () => {
+    setCustomName('');
+    setCustomDescription('');
+    setCustomUnit('EA');
+    setCustomCost('');
+    setCustomPrice('');
+    setCustomProductUrl('');
+  };
 
   if (!isOpen) return null;
 
@@ -82,13 +102,15 @@ export default function PricingItemPicker({
   };
 
   const handleAddCustomItem = () => {
+    if (!customName.trim()) return;
     onSelectMultiple([{
       id: '',
       categoryId: '',
-      name: 'Custom Item',
-      unitOfMeasure: 'EA',
-      contractorCost: 0,
-      sellingPrice: 0,
+      name: customName.trim(),
+      description: customDescription.trim() || undefined,
+      unitOfMeasure: customUnit,
+      contractorCost: parseFloat(customCost) || 0,
+      sellingPrice: parseFloat(customPrice) || 0,
       sortOrder: 0,
       isActive: true,
     }]);
@@ -141,7 +163,94 @@ export default function PricingItemPicker({
 
           {/* Content */}
           <div className="h-[400px] overflow-hidden flex">
-            {isLoading ? (
+            {showCustomForm ? (
+              /* Custom Item Form */
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="max-w-lg mx-auto space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Item Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={customName}
+                      onChange={(e) => setCustomName(e.target.value)}
+                      className="input"
+                      placeholder="e.g., Custom Tile Work"
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Description
+                    </label>
+                    <textarea
+                      value={customDescription}
+                      onChange={(e) => setCustomDescription(e.target.value)}
+                      className="input"
+                      rows={2}
+                      placeholder="Detailed description of the item..."
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                      <select
+                        value={customUnit}
+                        onChange={(e) => setCustomUnit(e.target.value as UnitOfMeasure)}
+                        className="input"
+                      >
+                        {UNITS.map((u) => (
+                          <option key={u} value={u}>{u}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Contractor Cost</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+                        <input
+                          type="number"
+                          value={customCost}
+                          onChange={(e) => setCustomCost(e.target.value)}
+                          className="input pl-7"
+                          placeholder="0.00"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+                        <input
+                          type="number"
+                          value={customPrice}
+                          onChange={(e) => setCustomPrice(e.target.value)}
+                          className="input pl-7"
+                          placeholder="0.00"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Product URL (optional)
+                    </label>
+                    <input
+                      type="url"
+                      value={customProductUrl}
+                      onChange={(e) => setCustomProductUrl(e.target.value)}
+                      className="input"
+                      placeholder="https://..."
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : isLoading ? (
               <div className="flex-1 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-designer-600" />
               </div>
@@ -211,10 +320,8 @@ export default function PricingItemPicker({
                               setSelectedItems((prev) => {
                                 const next = new Map(prev);
                                 if (allSelected) {
-                                  // Deselect all in category
                                   filteredItems.forEach((item) => next.delete(item.id));
                                 } else {
-                                  // Select all in category
                                   filteredItems.forEach((item) => next.set(item.id, item));
                                 }
                                 return next;
@@ -243,7 +350,6 @@ export default function PricingItemPicker({
                                   : 'hover:bg-gray-50'
                               )}
                             >
-                              {/* Checkbox */}
                               <div
                                 className={cn(
                                   'w-5 h-5 rounded border-2 flex items-center justify-center mr-3 flex-shrink-0 transition-colors',
@@ -254,32 +360,23 @@ export default function PricingItemPicker({
                               >
                                 {isSelected && <Check className="w-3 h-3 text-white" />}
                               </div>
-
                               <div className="flex-1 min-w-0">
                                 <p className="font-medium text-gray-900 text-sm truncate">
                                   {item.name}
                                 </p>
                                 <div className="flex items-center gap-3 mt-1">
-                                  <span className="text-xs text-gray-500">
-                                    {item.unitOfMeasure}
-                                  </span>
-                                  <span className="text-xs text-gray-400">•</span>
-                                  <span className="text-xs text-gray-500">
-                                    Cost: {formatCurrency(item.contractorCost)}
-                                  </span>
-                                  <span className="text-xs text-gray-400">•</span>
-                                  <span className="text-xs font-medium text-gray-700">
-                                    Sell: {formatCurrency(item.sellingPrice)}
-                                  </span>
+                                  <span className="text-xs text-gray-500">{item.unitOfMeasure}</span>
+                                  <span className="text-xs text-gray-400">·</span>
+                                  <span className="text-xs text-gray-500">Cost: {formatCurrency(item.contractorCost)}</span>
+                                  <span className="text-xs text-gray-400">·</span>
+                                  <span className="text-xs font-medium text-gray-700">Sell: {formatCurrency(item.sellingPrice)}</span>
                                 </div>
                               </div>
                             </button>
                           );
                         })}
                         {filteredItems?.length === 0 && (
-                          <p className="text-center text-gray-500 py-8">
-                            No items found
-                          </p>
+                          <p className="text-center text-gray-500 py-8">No items found</p>
                         )}
                       </div>
                     </>
@@ -287,9 +384,7 @@ export default function PricingItemPicker({
                     <div className="flex-1 flex items-center justify-center text-gray-500 p-8">
                       <div className="text-center">
                         <p className="font-medium">Select a category</p>
-                        <p className="text-sm mt-1">
-                          Choose a category from the left to see pricing items
-                        </p>
+                        <p className="text-sm mt-1">Choose a category from the left to see pricing items</p>
                       </div>
                     </div>
                   )}
@@ -301,29 +396,48 @@ export default function PricingItemPicker({
           {/* Footer */}
           <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
             <div className="flex items-center justify-between">
-              <button
-                onClick={handleAddCustomItem}
-                className="text-sm text-gray-600 hover:text-gray-800 font-medium flex items-center gap-1"
-              >
-                <Plus className="w-4 h-4" />
-                Add custom item
-              </button>
-
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={onClose}
-                  className="btn btn-outline"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddSelected}
-                  disabled={selectedItems.size === 0}
-                  className="btn btn-designer"
-                >
-                  Add {selectedItems.size > 0 ? `${selectedItems.size} ` : ''}Item{selectedItems.size !== 1 ? 's' : ''}
-                </button>
-              </div>
+              {showCustomForm ? (
+                <>
+                  <button
+                    onClick={() => setShowCustomForm(false)}
+                    className="text-sm text-gray-600 hover:text-gray-800 font-medium flex items-center gap-1"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Back to catalog
+                  </button>
+                  <div className="flex items-center gap-3">
+                    <button onClick={onClose} className="btn btn-outline">Cancel</button>
+                    <button
+                      onClick={handleAddCustomItem}
+                      disabled={!customName.trim()}
+                      className="btn btn-designer"
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add Custom Item
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setShowCustomForm(true)}
+                    className="text-sm text-gray-600 hover:text-gray-800 font-medium flex items-center gap-1"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add custom item
+                  </button>
+                  <div className="flex items-center gap-3">
+                    <button onClick={onClose} className="btn btn-outline">Cancel</button>
+                    <button
+                      onClick={handleAddSelected}
+                      disabled={selectedItems.size === 0}
+                      className="btn btn-designer"
+                    >
+                      Add {selectedItems.size > 0 ? `${selectedItems.size} ` : ''}Item{selectedItems.size !== 1 ? 's' : ''}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

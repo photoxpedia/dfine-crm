@@ -14,6 +14,10 @@ import {
   Download,
   Mail,
   CheckCircle,
+  XCircle,
+  Tag,
+  Settings,
+  DollarSign,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { estimatesApi } from '@/lib/api';
@@ -22,6 +26,121 @@ import SectionEditor from './components/SectionEditor';
 import PricingItemPicker from './components/PricingItemPicker';
 import EstimatePDFTemplate from '@/components/pdf/EstimatePDFTemplate';
 import type { Estimate, EstimateSection, EstimateLineItem, PricingItem, ProjectType } from '@/types';
+
+function SettingsModal({
+  estimate,
+  onClose,
+  onSave,
+  isSaving,
+}: {
+  estimate: Estimate;
+  onClose: () => void;
+  onSave: (data: any) => void;
+  isSaving: boolean;
+}) {
+  const [scopeOfWork, setScopeOfWork] = useState(estimate.scopeOfWork || '');
+  const [countyLicensing, setCountyLicensing] = useState(estimate.countyLicensing || false);
+  const [projectStartDate, setProjectStartDate] = useState(
+    estimate.projectStartDate ? estimate.projectStartDate.split('T')[0] : ''
+  );
+  const [notes, setNotes] = useState(estimate.notes || '');
+  const [validUntil, setValidUntil] = useState(
+    estimate.validUntil ? estimate.validUntil.split('T')[0] : ''
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div className="fixed inset-0 bg-gray-500/75" onClick={onClose} />
+        <div className="relative bg-white rounded-xl shadow-xl p-6 w-full max-w-lg">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Estimate Settings</h3>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Scope of Work
+              </label>
+              <textarea
+                value={scopeOfWork}
+                onChange={(e) => setScopeOfWork(e.target.value)}
+                rows={4}
+                className="input"
+                placeholder="Describe the scope of work for this project..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                className="input"
+                placeholder="Internal notes..."
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Project Start Date
+                </label>
+                <input
+                  type="date"
+                  value={projectStartDate}
+                  onChange={(e) => setProjectStartDate(e.target.value)}
+                  className="input"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Valid Until
+                </label>
+                <input
+                  type="date"
+                  value={validUntil}
+                  onChange={(e) => setValidUntil(e.target.value)}
+                  className="input"
+                />
+              </div>
+            </div>
+
+            <label className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+              <input
+                type="checkbox"
+                checked={countyLicensing}
+                onChange={(e) => setCountyLicensing(e.target.checked)}
+                className="w-4 h-4 text-designer-600 rounded"
+              />
+              <div>
+                <p className="font-medium text-gray-900 text-sm">County Licensing Required</p>
+                <p className="text-xs text-gray-500">Check if this project requires county licensing/permits</p>
+              </div>
+            </label>
+          </div>
+
+          <div className="flex gap-3 mt-6">
+            <button onClick={onClose} className="btn btn-outline flex-1">Cancel</button>
+            <button
+              onClick={() => onSave({
+                scopeOfWork: scopeOfWork || undefined,
+                countyLicensing,
+                projectStartDate: projectStartDate || undefined,
+                notes: notes || undefined,
+                validUntil: validUntil || undefined,
+              })}
+              disabled={isSaving}
+              className="btn btn-designer flex-1"
+            >
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Save Settings
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const MARGIN_PRESETS = [
   { label: '40%', value: 40 },
@@ -45,6 +164,10 @@ export default function EstimateBuilderPage() {
   const [showMenu, setShowMenu] = useState(false);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [sendEmail, setSendEmail] = useState(true);
+  const [showDiscountModal, setShowDiscountModal] = useState(false);
+  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
+  const [discountValue, setDiscountValue] = useState('');
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   // Fetch estimate
   const { data: estimate, isLoading, error } = useQuery({
@@ -111,8 +234,9 @@ export default function EstimateBuilderPage() {
       return estimatesApi.addLineItem(id!, sectionId, {
         pricingItemId: item.id || undefined,
         name: item.name || 'New Item',
+        description: item.description || undefined,
         unitOfMeasure: item.unitOfMeasure || 'EA',
-        quantity: 1, // Default to 1 so items have a value
+        quantity: 1,
         contractorCost: item.contractorCost || 0,
         sellingPrice: item.sellingPrice || 0,
       });
@@ -164,6 +288,28 @@ export default function EstimateBuilderPage() {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error || 'Failed to finalize estimate');
+    },
+  });
+
+  const discountMutation = useMutation({
+    mutationFn: async ({ type, value }: { type: 'percentage' | 'fixed' | null; value: number }) => {
+      return estimatesApi.applyDiscount(id!, type, value);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['estimate', id] });
+      toast.success('Discount applied');
+      setShowDiscountModal(false);
+    },
+  });
+
+  const settingsMutation = useMutation({
+    mutationFn: async (data: { scopeOfWork?: string; countyLicensing?: boolean; projectStartDate?: string; notes?: string; validUntil?: string }) => {
+      return estimatesApi.updateSettings(id!, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['estimate', id] });
+      toast.success('Settings saved');
+      setShowSettingsModal(false);
     },
   });
 
@@ -250,7 +396,7 @@ export default function EstimateBuilderPage() {
     );
   }
 
-  const isEditable = estimate.status === 'draft';
+  const isEditable = estimate.status === 'draft' || estimate.status === 'rejected';
   // Use actual project type from project data, not inferred from name
   const projectType = (estimate.project as any)?.projectType || 'bathroom' as ProjectType;
 
@@ -306,13 +452,13 @@ export default function EstimateBuilderPage() {
             </>
           )}
 
-          {estimate.status === 'draft' && (
+          {(estimate.status === 'draft' || estimate.status === 'rejected') && (
             <button
               onClick={() => setShowFinalizeModal(true)}
               className="btn btn-designer"
             >
               <Send className="w-4 h-4 mr-2" />
-              Finalize & Send
+              {estimate.status === 'rejected' ? 'Revise & Resend' : 'Finalize & Send'}
             </button>
           )}
 
@@ -342,6 +488,32 @@ export default function EstimateBuilderPage() {
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
                 <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                  {isEditable && (
+                    <button
+                      onClick={() => {
+                        setDiscountType(estimate.discountType === 'fixed' ? 'fixed' : 'percentage');
+                        setDiscountValue(estimate.discountValue ? String(estimate.discountValue) : '');
+                        setShowDiscountModal(true);
+                        setShowMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Tag className="w-4 h-4" />
+                      {estimate.discountAmount > 0 ? 'Edit Discount' : 'Add Discount'}
+                    </button>
+                  )}
+                  {isEditable && (
+                    <button
+                      onClick={() => {
+                        setShowSettingsModal(true);
+                        setShowMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Settings className="w-4 h-4" />
+                      Estimate Settings
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       duplicateMutation.mutate();
@@ -368,6 +540,30 @@ export default function EstimateBuilderPage() {
           </div>
         </div>
       </div>
+
+      {/* Rejection Banner */}
+      {estimate.status === 'rejected' && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start gap-4">
+          <XCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="font-semibold text-red-800">Client Requested Changes</h3>
+            {estimate.rejectedAt && (
+              <p className="text-sm text-red-600 mt-0.5">
+                Rejected on {new Date(estimate.rejectedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+              </p>
+            )}
+            {estimate.rejectionReason && (
+              <div className="mt-2 bg-white border border-red-100 rounded-lg p-3">
+                <p className="text-sm font-medium text-red-800 mb-1">Client Feedback:</p>
+                <p className="text-sm text-red-700">{estimate.rejectionReason}</p>
+              </div>
+            )}
+            <p className="text-sm text-red-600 mt-2">
+              This estimate is editable. Make changes and re-send to the client.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Summary Card */}
       <div className="card p-6">
@@ -434,19 +630,32 @@ export default function EstimateBuilderPage() {
       {/* Grand Total */}
       {estimate.sections && estimate.sections.length > 0 && (
         <div className="card p-6 bg-gray-900 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-sm">Grand Total</p>
-              <p className="text-sm text-gray-400 mt-1">
-                Includes all sections and items
-              </p>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-gray-400 text-sm">Subtotal</p>
+              <p className="text-lg font-semibold">{formatCurrency(estimate.subtotalSelling)}</p>
             </div>
-            <div className="text-right">
+            {estimate.discountAmount > 0 && (
+              <div className="flex items-center justify-between text-green-400">
+                <p className="text-sm flex items-center gap-2">
+                  <Tag className="w-4 h-4" />
+                  Discount
+                  {estimate.discountType === 'percentage' && estimate.discountValue
+                    ? ` (${estimate.discountValue}%)`
+                    : ''}
+                </p>
+                <p className="text-lg font-semibold">-{formatCurrency(estimate.discountAmount)}</p>
+              </div>
+            )}
+            <div className="border-t border-gray-700 pt-3 flex items-center justify-between">
+              <div>
+                <p className="text-white font-medium">Grand Total</p>
+                <p className="text-gray-400 text-sm mt-1">
+                  Cost: {formatCurrency(estimate.subtotalContractor)} |
+                  Profit: {formatCurrency(estimate.total - estimate.subtotalContractor)}
+                </p>
+              </div>
               <p className="text-3xl font-bold">{formatCurrency(estimate.total)}</p>
-              <p className="text-gray-400 text-sm mt-1">
-                Cost: {formatCurrency(estimate.subtotalContractor)} |
-                Profit: {formatCurrency(estimate.total - estimate.subtotalContractor)}
-              </p>
             </div>
           </div>
         </div>
@@ -529,6 +738,119 @@ export default function EstimateBuilderPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Discount Modal */}
+      {showDiscountModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="fixed inset-0 bg-gray-500/75" onClick={() => setShowDiscountModal(false)} />
+            <div className="relative bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Apply Discount</h3>
+
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => setDiscountType('percentage')}
+                  className={cn(
+                    'flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors',
+                    discountType === 'percentage'
+                      ? 'bg-designer-50 border-designer-300 text-designer-700'
+                      : 'border-gray-200 hover:bg-gray-50'
+                  )}
+                >
+                  <Percent className="w-4 h-4 inline mr-1" />
+                  Percentage
+                </button>
+                <button
+                  onClick={() => setDiscountType('fixed')}
+                  className={cn(
+                    'flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors',
+                    discountType === 'fixed'
+                      ? 'bg-designer-50 border-designer-300 text-designer-700'
+                      : 'border-gray-200 hover:bg-gray-50'
+                  )}
+                >
+                  <DollarSign className="w-4 h-4 inline mr-1" />
+                  Fixed Amount
+                </button>
+              </div>
+
+              <div className="relative mb-4">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  {discountType === 'percentage' ? '%' : '$'}
+                </span>
+                <input
+                  type="number"
+                  value={discountValue}
+                  onChange={(e) => setDiscountValue(e.target.value)}
+                  placeholder={discountType === 'percentage' ? 'e.g., 10' : 'e.g., 500'}
+                  min="0"
+                  step="0.01"
+                  className="input pl-8"
+                  autoFocus
+                />
+              </div>
+
+              {discountValue && parseFloat(discountValue) > 0 && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-green-800">
+                    Discount: <strong>
+                      {discountType === 'percentage'
+                        ? `${discountValue}% = ${formatCurrency(estimate.subtotalSelling * parseFloat(discountValue) / 100)}`
+                        : formatCurrency(parseFloat(discountValue))}
+                    </strong>
+                  </p>
+                  <p className="text-sm text-green-700 mt-1">
+                    New total: <strong>
+                      {formatCurrency(
+                        estimate.subtotalSelling - (discountType === 'percentage'
+                          ? estimate.subtotalSelling * parseFloat(discountValue) / 100
+                          : parseFloat(discountValue))
+                      )}
+                    </strong>
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                {estimate.discountAmount > 0 && (
+                  <button
+                    onClick={() => discountMutation.mutate({ type: null, value: 0 })}
+                    className="btn btn-outline text-red-600 border-red-200 hover:bg-red-50"
+                  >
+                    Remove
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowDiscountModal(false)}
+                  className="btn btn-outline flex-1"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => discountMutation.mutate({
+                    type: discountType,
+                    value: parseFloat(discountValue) || 0,
+                  })}
+                  disabled={!discountValue || parseFloat(discountValue) <= 0}
+                  className="btn btn-designer flex-1"
+                >
+                  Apply Discount
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Modal */}
+      {showSettingsModal && estimate && (
+        <SettingsModal
+          estimate={estimate}
+          onClose={() => setShowSettingsModal(false)}
+          onSave={(data) => settingsMutation.mutate(data)}
+          isSaving={settingsMutation.isPending}
+        />
       )}
 
       {/* Finalize Modal */}

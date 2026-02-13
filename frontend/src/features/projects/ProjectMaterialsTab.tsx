@@ -9,6 +9,7 @@ import {
   Search,
   ExternalLink,
   Calendar,
+  PauseCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
@@ -25,6 +26,7 @@ interface MaterialItem {
   estimatedCost?: number;
   actualCost?: number;
   purchaseStatus: string;
+  holdReason?: string;
   isPurchaseable: boolean;
   readyToPurchaseAt?: string;
   purchasedAt?: string;
@@ -36,7 +38,7 @@ interface ProjectMaterialsTabProps {
   projectId: string;
 }
 
-type MaterialStatus = 'pending' | 'ordered' | 'shipped' | 'delivered' | 'installed' | 'cancelled';
+type MaterialStatus = 'pending' | 'on_hold' | 'ordered' | 'shipped' | 'delivered' | 'installed' | 'cancelled';
 
 const STATUS_CONFIG: Record<MaterialStatus, {
   label: string;
@@ -49,6 +51,12 @@ const STATUS_CONFIG: Record<MaterialStatus, {
     color: 'text-gray-600',
     bgColor: 'bg-gray-100',
     icon: ShoppingCart,
+  },
+  on_hold: {
+    label: 'On Hold',
+    color: 'text-amber-600',
+    bgColor: 'bg-amber-100',
+    icon: PauseCircle,
   },
   ordered: {
     label: 'Ordered',
@@ -82,7 +90,7 @@ const STATUS_CONFIG: Record<MaterialStatus, {
   },
 };
 
-const STATUS_ORDER: MaterialStatus[] = ['pending', 'ordered', 'shipped', 'delivered', 'installed'];
+const STATUS_ORDER: MaterialStatus[] = ['pending', 'on_hold', 'ordered', 'shipped', 'delivered', 'installed'];
 
 export default function ProjectMaterialsTab({ projectId }: ProjectMaterialsTabProps) {
   const [search, setSearch] = useState('');
@@ -118,6 +126,7 @@ export default function ProjectMaterialsTab({ projectId }: ProjectMaterialsTabPr
   const summary = {
     total: materials.length,
     pending: materials.filter((m) => m.purchaseStatus === 'pending').length,
+    onHold: materials.filter((m) => m.purchaseStatus === 'on_hold').length,
     ordered: materials.filter((m) => ['ordered', 'shipped'].includes(m.purchaseStatus)).length,
     delivered: materials.filter((m) => m.purchaseStatus === 'delivered').length,
     installed: materials.filter((m) => m.purchaseStatus === 'installed').length,
@@ -127,10 +136,11 @@ export default function ProjectMaterialsTab({ projectId }: ProjectMaterialsTabPr
 
   // Update material status mutation
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+    mutationFn: async ({ id, status, holdReason }: { id: string; status: string; holdReason?: string }) => {
       return api.patch(`/purchasing/materials/${id}/status`, {
         status,
-        statusDate: new Date().toISOString()
+        statusDate: new Date().toISOString(),
+        holdReason,
       });
     },
     onSuccess: () => {
@@ -150,7 +160,7 @@ export default function ProjectMaterialsTab({ projectId }: ProjectMaterialsTabPr
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <div className="card p-4">
           <p className="text-sm text-gray-500">Total Items</p>
           <p className="text-2xl font-bold text-gray-900">{summary.total}</p>
@@ -159,6 +169,12 @@ export default function ProjectMaterialsTab({ projectId }: ProjectMaterialsTabPr
           <p className="text-sm text-gray-500">Ready to Purchase</p>
           <p className="text-2xl font-bold text-gray-600">{summary.pending}</p>
         </div>
+        {summary.onHold > 0 && (
+          <div className="card p-4 border-amber-200">
+            <p className="text-sm text-amber-600">On Hold</p>
+            <p className="text-2xl font-bold text-amber-600">{summary.onHold}</p>
+          </div>
+        )}
         <div className="card p-4">
           <p className="text-sm text-gray-500">In Transit</p>
           <p className="text-2xl font-bold text-blue-600">{summary.ordered}</p>
@@ -257,6 +273,9 @@ export default function ProjectMaterialsTab({ projectId }: ProjectMaterialsTabPr
                       onStatusChange={(newStatus) => {
                         updateStatusMutation.mutate({ id: material.id, status: newStatus });
                       }}
+                      onHold={(holdReason) => {
+                        updateStatusMutation.mutate({ id: material.id, status: 'on_hold', holdReason });
+                      }}
                     />
                   ))}
                 </div>
@@ -274,6 +293,9 @@ export default function ProjectMaterialsTab({ projectId }: ProjectMaterialsTabPr
               onStatusChange={(newStatus) => {
                 updateStatusMutation.mutate({ id: material.id, status: newStatus });
               }}
+              onHold={(holdReason) => {
+                updateStatusMutation.mutate({ id: material.id, status: 'on_hold', holdReason });
+              }}
             />
           ))}
         </div>
@@ -286,25 +308,35 @@ export default function ProjectMaterialsTab({ projectId }: ProjectMaterialsTabPr
 function MaterialCard({
   material,
   onStatusChange,
+  onHold,
 }: {
   material: MaterialItem;
   onStatusChange: (status: string) => void;
+  onHold: (holdReason: string) => void;
 }) {
+  const [showHoldInput, setShowHoldInput] = useState(false);
+  const [holdReason, setHoldReason] = useState('');
   const status = material.purchaseStatus as MaterialStatus;
   const config = STATUS_CONFIG[status];
 
   const getNextStatus = (current: MaterialStatus): MaterialStatus | null => {
-    const index = STATUS_ORDER.indexOf(current);
-    if (index < STATUS_ORDER.length - 1) {
-      return STATUS_ORDER[index + 1];
+    if (current === 'on_hold') return 'ordered'; // From hold, next is ordered (release)
+    const normalOrder: MaterialStatus[] = ['pending', 'ordered', 'shipped', 'delivered', 'installed'];
+    const index = normalOrder.indexOf(current);
+    if (index >= 0 && index < normalOrder.length - 1) {
+      return normalOrder[index + 1];
     }
     return null;
   };
 
   const nextStatus = getNextStatus(status);
+  const canHold = status === 'pending'; // Only pending items can be put on hold
 
   return (
-    <div className="card p-4">
+    <div className={cn(
+      'card p-4',
+      status === 'on_hold' && 'border-amber-200 bg-amber-50/50'
+    )}>
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-1">
@@ -339,6 +371,14 @@ function MaterialCard({
             )}
           </div>
 
+          {/* Hold reason */}
+          {status === 'on_hold' && material.holdReason && (
+            <div className="mt-2 flex items-center gap-2 text-sm text-amber-700 bg-amber-100 px-3 py-1.5 rounded">
+              <PauseCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{material.holdReason}</span>
+            </div>
+          )}
+
           {/* Status dates */}
           <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
             {material.purchasedAt && (
@@ -360,17 +400,77 @@ function MaterialCard({
               </span>
             )}
           </div>
+
+          {/* Hold reason input */}
+          {showHoldInput && (
+            <div className="mt-3 flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Reason for hold (e.g. Out of stock, Checking availability)"
+                value={holdReason}
+                onChange={(e) => setHoldReason(e.target.value)}
+                className="input text-sm flex-1"
+                autoFocus
+              />
+              <button
+                onClick={() => {
+                  onHold(holdReason);
+                  setShowHoldInput(false);
+                  setHoldReason('');
+                }}
+                className="btn btn-sm bg-amber-500 text-white hover:bg-amber-600"
+              >
+                Hold
+              </button>
+              <button
+                onClick={() => {
+                  setShowHoldInput(false);
+                  setHoldReason('');
+                }}
+                className="btn btn-sm btn-outline"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Quick actions */}
-        {nextStatus && (
-          <button
-            onClick={() => onStatusChange(nextStatus)}
-            className="btn btn-outline text-sm"
-          >
-            Mark as {STATUS_CONFIG[nextStatus].label}
-          </button>
-        )}
+        <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+          {canHold && !showHoldInput && (
+            <button
+              onClick={() => setShowHoldInput(true)}
+              className="btn btn-outline text-sm text-amber-600 border-amber-300 hover:bg-amber-50"
+            >
+              <PauseCircle className="w-4 h-4 mr-1" />
+              Hold
+            </button>
+          )}
+          {status === 'on_hold' && (
+            <button
+              onClick={() => onStatusChange('pending')}
+              className="btn btn-outline text-sm"
+            >
+              Release Hold
+            </button>
+          )}
+          {nextStatus && status !== 'on_hold' && (
+            <button
+              onClick={() => onStatusChange(nextStatus)}
+              className="btn btn-outline text-sm"
+            >
+              Mark as {STATUS_CONFIG[nextStatus].label}
+            </button>
+          )}
+          {status === 'on_hold' && (
+            <button
+              onClick={() => onStatusChange('ordered')}
+              className="btn btn-designer text-sm"
+            >
+              Mark Ordered
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

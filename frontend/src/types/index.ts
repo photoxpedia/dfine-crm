@@ -16,7 +16,7 @@ export interface User {
 export type LeadStatus = 'new' | 'contacted' | 'pre_estimate' | 'estimated' | 'converted' | 'on_hold' | 'future_client' | 'dropped';
 export type SubStatus = 'in_progress' | 'complete';
 export type FollowUpReason = 'budget' | 'timing' | 'permits' | 'comparing' | 'personal' | 'other';
-export type LeadEventType = 'created' | 'status_change' | 'substatus_change' | 'note_added' | 'photo_uploaded' | 'assigned' | 'followup_set' | 'reactivated';
+export type LeadEventType = 'created' | 'status_change' | 'substatus_change' | 'note_added' | 'contact_logged' | 'photo_uploaded' | 'assigned' | 'followup_set' | 'reactivated';
 export type PhotoTag = 'before_photo' | 'measurement' | 'other';
 export type ProjectType = 'bathroom' | 'kitchen' | 'general';
 
@@ -177,8 +177,14 @@ export interface Estimate {
   marginPercentage: number;
   subtotalContractor: number;
   subtotalSelling: number;
+  discountType?: 'percentage' | 'fixed' | null;
+  discountValue?: number;
+  discountAmount: number;
   total: number;
   notes?: string;
+  scopeOfWork?: string;
+  countyLicensing?: boolean;
+  projectStartDate?: string;
   validUntil?: string;
   sentAt?: string;
   viewedAt?: string;

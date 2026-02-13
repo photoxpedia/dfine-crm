@@ -288,7 +288,7 @@ export default function EstimateApprovalPage() {
                           <p className="text-sm text-gray-500 mt-1">{item.description}</p>
                         )}
                         <p className="text-sm text-gray-400 mt-1">
-                          {item.quantity} {item.unitOfMeasure} @ {formatCurrency(item.sellingPrice)}
+                          {item.quantity} {item.unitOfMeasure}
                         </p>
                       </div>
                       <span className="font-semibold text-gray-900 ml-4">
@@ -299,6 +299,14 @@ export default function EstimateApprovalPage() {
                 </div>
               </div>
             ))}
+
+            {/* Scope of Work */}
+            {(estimate as any).scopeOfWork && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 className="font-semibold text-gray-900 mb-2">Scope of Work</h3>
+                <p className="text-gray-600 whitespace-pre-wrap">{(estimate as any).scopeOfWork}</p>
+              </div>
+            )}
 
             {/* Notes */}
             {estimate.notes && (
@@ -324,10 +332,36 @@ export default function EstimateApprovalPage() {
           <div className="space-y-6">
             {/* Total Card */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <p className="text-gray-500 text-sm mb-1">Estimate Total</p>
-              <p className="text-3xl font-bold text-designer-600">
-                {formatCurrency(estimate.total)}
-              </p>
+              {(estimate as any).discountAmount > 0 ? (
+                <>
+                  <p className="text-gray-500 text-sm mb-1">Subtotal</p>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {formatCurrency(estimate.subtotalSelling)}
+                  </p>
+                  <div className="flex items-center justify-between mt-2 text-green-600">
+                    <p className="text-sm">
+                      Discount
+                      {(estimate as any).discountType === 'percentage' && (estimate as any).discountValue
+                        ? ` (${(estimate as any).discountValue}%)`
+                        : ''}
+                    </p>
+                    <p className="font-semibold">-{formatCurrency((estimate as any).discountAmount)}</p>
+                  </div>
+                  <div className="border-t border-gray-200 mt-3 pt-3">
+                    <p className="text-gray-500 text-sm mb-1">Total</p>
+                    <p className="text-3xl font-bold text-designer-600">
+                      {formatCurrency(estimate.total)}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-gray-500 text-sm mb-1">Estimate Total</p>
+                  <p className="text-3xl font-bold text-designer-600">
+                    {formatCurrency(estimate.total)}
+                  </p>
+                </>
+              )}
 
               <button
                 onClick={handleDownloadPDF}
@@ -605,6 +639,32 @@ export default function EstimateApprovalPage() {
                           {estimate?.project?.city && `, ${estimate?.project?.city}`}
                         </span>
                       </div>
+                      {(estimate as any)?.projectStartDate && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Estimated Start Date:</span>
+                          <span className="font-medium text-gray-900">
+                            {formatDate((estimate as any).projectStartDate)}
+                          </span>
+                        </div>
+                      )}
+                      {(estimate as any)?.countyLicensing && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">County Licensing:</span>
+                          <span className="font-medium text-green-600">Required</span>
+                        </div>
+                      )}
+                      {(estimate as any)?.discountAmount > 0 && (
+                        <>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Subtotal:</span>
+                            <span className="font-medium text-gray-900">{estimate && formatCurrency(estimate.subtotalSelling)}</span>
+                          </div>
+                          <div className="flex justify-between text-green-600">
+                            <span>Discount:</span>
+                            <span className="font-medium">-{estimate && formatCurrency((estimate as any).discountAmount)}</span>
+                          </div>
+                        </>
+                      )}
                       <div className="flex justify-between border-t border-gray-200 pt-2 mt-2">
                         <span className="text-gray-700 font-medium">Total Amount:</span>
                         <span className="text-xl font-bold text-designer-600">

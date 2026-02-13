@@ -6,7 +6,7 @@ import { authenticate, requireDesignerOrAdmin, requireAdmin } from '../middlewar
 import { LeadStatus, SubStatus, FollowUpReason, ProjectType, PhotoTag } from '@prisma/client';
 import { createLeadHistory, getLeadHistory } from '../services/leadHistory.service.js';
 import { createNotification } from '../services/notification.service.js';
-import { uploadLeadPhotos, getFullPath } from '../config/upload.js';
+import { uploadLeadPhotos, getFullPath, getRelativePath } from '../config/upload.js';
 
 const router = Router();
 
@@ -42,13 +42,27 @@ const addNoteSchema = z.object({
   note: z.string().min(1, 'Note is required'),
 });
 
+const logContactSchema = z.object({
+  contactType: z.enum(['call', 'email', 'meeting', 'site_visit']),
+  note: z.string().min(1, 'Note is required'),
+});
+
 // List leads
 router.get('/', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
   const { status, projectType, search, designerId, page = '1', limit = '20' } = req.query;
 
   const where: any = {};
 
-  // Designers only see their own leads, admin sees all
+  // Organization scoping
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (userOrg) {
+    where.organizationId = userOrg.organizationId;
+  }
+
+  // Designers only see their own leads, admin sees all within org
   if (req.user!.role === 'designer') {
     where.designerId = req.user!.id;
   } else if (designerId) {
@@ -408,6 +422,36 @@ router.post('/:id/notes', authenticate, requireDesignerOrAdmin, async (req: Requ
   res.status(201).json(historyEntry);
 });
 
+// Log contact activity (call, email, meeting, site visit)
+router.post('/:id/contact', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+  const { contactType, note } = logContactSchema.parse(req.body);
+
+  const existing = await prisma.lead.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, designerId: true },
+  });
+
+  if (!existing) {
+    res.status(404).json({ error: 'Lead not found' });
+    return;
+  }
+
+  if (req.user!.role === 'designer' && existing.designerId !== req.user!.id) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  const historyEntry = await createLeadHistory({
+    leadId: existing.id,
+    userId: req.user!.id,
+    eventType: 'contact_logged',
+    note,
+    metadata: { contactType },
+  });
+
+  res.status(201).json(historyEntry);
+});
+
 // Get lead history (timeline)
 router.get('/:id/history', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
   const { limit = '50', offset = '0' } = req.query;
@@ -473,7 +517,7 @@ router.post(
           data: {
             leadId: existing.id,
             userId: req.user!.id,
-            filePath: file.path,
+            filePath: getRelativePath(file.path),
             fileName: file.originalname,
             fileSize: file.size,
             mimeType: file.mimetype,

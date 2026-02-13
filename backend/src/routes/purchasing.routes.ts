@@ -34,6 +34,103 @@ async function generatePONumber(): Promise<string> {
   return `PO-${year}-${String(count + 1).padStart(4, '0')}`;
 }
 
+// ==================== MATERIALS ENDPOINTS ====================
+
+// List materials for a project
+router.get('/materials/:projectId', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+  const { projectId } = req.params;
+  const { status } = req.query;
+
+  const where: any = { projectId };
+  if (status) where.purchaseStatus = status as PurchaseStatus;
+
+  const materials = await prisma.materialItem.findMany({
+    where,
+    include: {
+      vendor: { select: { id: true, name: true } },
+      estimateLineItem: { select: { id: true, name: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  res.json({ materials });
+});
+
+// Update material status
+router.patch('/materials/:id/status', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+  const { status, statusDate, holdReason } = req.body;
+
+  const existing = await prisma.materialItem.findUnique({
+    where: { id: req.params.id },
+  });
+
+  if (!existing) {
+    res.status(404).json({ error: 'Material item not found' });
+    return;
+  }
+
+  const updateData: any = {
+    purchaseStatus: status,
+  };
+
+  // Set date fields based on status
+  const date = statusDate ? new Date(statusDate) : new Date();
+  switch (status) {
+    case 'on_hold':
+      updateData.holdReason = holdReason || null;
+      break;
+    case 'pending':
+      updateData.holdReason = null;
+      break;
+    case 'ordered':
+      updateData.purchasedAt = date;
+      updateData.holdReason = null;
+      break;
+    case 'shipped':
+      break;
+    case 'delivered':
+      updateData.deliveredAt = date;
+      break;
+    case 'installed':
+      updateData.installedAt = date;
+      break;
+  }
+
+  const material = await prisma.materialItem.update({
+    where: { id: req.params.id },
+    data: updateData,
+  });
+
+  res.json(material);
+});
+
+// Update material details (actual cost, vendor, notes)
+router.patch('/materials/:id', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+  const { actualCost, vendorId, notes } = req.body;
+
+  const existing = await prisma.materialItem.findUnique({
+    where: { id: req.params.id },
+  });
+
+  if (!existing) {
+    res.status(404).json({ error: 'Material item not found' });
+    return;
+  }
+
+  const material = await prisma.materialItem.update({
+    where: { id: req.params.id },
+    data: {
+      actualCost: actualCost !== undefined ? actualCost : undefined,
+      vendorId: vendorId !== undefined ? vendorId : undefined,
+      notes: notes !== undefined ? notes : undefined,
+    },
+  });
+
+  res.json(material);
+});
+
+// ==================== PURCHASE ORDER ENDPOINTS ====================
+
 // List purchase orders
 router.get('/', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
   const { projectId, vendorId, status, page = '1', limit = '20' } = req.query;

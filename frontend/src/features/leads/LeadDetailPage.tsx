@@ -16,6 +16,9 @@ import {
   ArrowRight,
   MoreVertical,
   Trash2,
+  MessageSquare,
+  Users,
+  Send,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { leadsApi, usersApi } from '@/lib/api';
@@ -43,6 +46,9 @@ export default function LeadDetailPage() {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'photos' | 'timeline'>('details');
+  const [quickNote, setQuickNote] = useState('');
+  const [contactNote, setContactNote] = useState('');
+  const [contactType, setContactType] = useState<'call' | 'email' | 'meeting' | 'site_visit'>('call');
 
   // Get lead details
   const { data: lead, isLoading, error } = useQuery({
@@ -184,6 +190,36 @@ export default function LeadDetailPage() {
     },
     onError: () => {
       toast.error('Failed to delete photo');
+    },
+  });
+
+  // Add note mutation
+  const addNoteMutation = useMutation({
+    mutationFn: async (note: string) => {
+      return leadsApi.addNote(id!, note);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lead', id, 'history'] });
+      toast.success('Note added');
+      setQuickNote('');
+    },
+    onError: () => {
+      toast.error('Failed to add note');
+    },
+  });
+
+  // Log contact mutation
+  const logContactMutation = useMutation({
+    mutationFn: async ({ type, note }: { type: string; note: string }) => {
+      return leadsApi.logContact(id!, type, note);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lead', id, 'history'] });
+      toast.success('Contact logged');
+      setContactNote('');
+    },
+    onError: () => {
+      toast.error('Failed to log contact');
     },
   });
 
@@ -499,9 +535,98 @@ export default function LeadDetailPage() {
       )}
 
       {activeTab === 'timeline' && (
-        <div className="card p-6">
-          <h3 className="font-semibold text-gray-900 mb-4">Activity Timeline</h3>
-          <LeadTimeline history={history} />
+        <div className="space-y-4">
+          {/* Quick Actions Row */}
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Add Quick Note */}
+            <div className="card p-4">
+              <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <MessageSquare className="w-4 h-4" />
+                Quick Note
+              </h4>
+              <div className="flex gap-2">
+                <textarea
+                  value={quickNote}
+                  onChange={(e) => setQuickNote(e.target.value)}
+                  placeholder="Add a note..."
+                  className="input text-sm min-h-[60px] flex-1"
+                  rows={2}
+                />
+                <button
+                  onClick={() => addNoteMutation.mutate(quickNote)}
+                  disabled={!quickNote.trim() || addNoteMutation.isPending}
+                  className="btn btn-designer self-end"
+                >
+                  {addNoteMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Log Contact Activity */}
+            <div className="card p-4">
+              <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <Phone className="w-4 h-4" />
+                Log Contact
+              </h4>
+              <div className="flex gap-1.5 mb-2">
+                {([
+                  { value: 'call', label: 'Call', icon: Phone },
+                  { value: 'email', label: 'Email', icon: Mail },
+                  { value: 'meeting', label: 'Meeting', icon: Users },
+                  { value: 'site_visit', label: 'Site Visit', icon: MapPin },
+                ] as const).map(({ value, label, icon: Icon }) => (
+                  <button
+                    key={value}
+                    onClick={() => setContactType(value)}
+                    className={cn(
+                      'flex items-center gap-1 px-2 py-1 text-xs rounded-full font-medium transition-colors',
+                      contactType === value
+                        ? 'bg-cyan-100 text-cyan-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    <Icon className="w-3 h-3" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={contactNote}
+                  onChange={(e) => setContactNote(e.target.value)}
+                  placeholder={`What happened during the ${contactType.replace('_', ' ')}?`}
+                  className="input text-sm flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && contactNote.trim()) {
+                      logContactMutation.mutate({ type: contactType, note: contactNote });
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => logContactMutation.mutate({ type: contactType, note: contactNote })}
+                  disabled={!contactNote.trim() || logContactMutation.isPending}
+                  className="btn btn-designer"
+                >
+                  {logContactMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Timeline */}
+          <div className="card p-6">
+            <h3 className="font-semibold text-gray-900 mb-4">Activity Timeline</h3>
+            <LeadTimeline history={history} />
+          </div>
         </div>
       )}
 

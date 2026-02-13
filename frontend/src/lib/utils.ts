@@ -134,12 +134,22 @@ export function getFollowUpReasonLabel(reason: string): string {
   return labels[reason] || reason;
 }
 
-export function getEventTypeLabel(eventType: string): string {
+export function getEventTypeLabel(eventType: string, metadata?: any): string {
+  if (eventType === 'contact_logged' && metadata?.contactType) {
+    const contactLabels: Record<string, string> = {
+      call: 'Phone Call',
+      email: 'Email Sent',
+      meeting: 'Meeting',
+      site_visit: 'Site Visit',
+    };
+    return contactLabels[metadata.contactType] || 'Contact Logged';
+  }
   const labels: Record<string, string> = {
     created: 'Lead Created',
     status_change: 'Status Changed',
     substatus_change: 'Progress Updated',
     note_added: 'Note Added',
+    contact_logged: 'Contact Logged',
     photo_uploaded: 'Photos Uploaded',
     assigned: 'Lead Assigned',
     followup_set: 'Follow-up Scheduled',

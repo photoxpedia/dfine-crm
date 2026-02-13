@@ -12,6 +12,7 @@ import {
   Loader2,
   CalendarClock,
   Users,
+  UserPlus,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { leadsApi, dashboardApi, usersApi } from '@/lib/api';
@@ -113,6 +114,19 @@ export default function LeadsListPage() {
     },
     onError: () => {
       toast.error('Failed to update status');
+    },
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: async ({ leadId, designerId }: { leadId: string; designerId: string }) => {
+      return leadsApi.assign(leadId, designerId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      toast.success('Lead assigned');
+    },
+    onError: () => {
+      toast.error('Failed to assign lead');
     },
   });
 
@@ -269,6 +283,7 @@ export default function LeadsListPage() {
                   <th>Contact</th>
                   <th>Project Type</th>
                   <th>Status</th>
+                  {isAdmin && <th>Designer</th>}
                   <th>Created</th>
                   <th className="w-16"></th>
                 </tr>
@@ -279,9 +294,12 @@ export default function LeadsListPage() {
                     key={lead.id}
                     lead={lead}
                     basePath={basePath}
+                    isAdmin={isAdmin}
+                    designers={designers}
                     isFollowUpToday={todayLeadIds.has(lead.id)}
                     onStatusChange={() => handleStatusChange(lead)}
                     onConvert={() => convertMutation.mutate(lead.id)}
+                    onAssign={(designerId) => assignMutation.mutate({ leadId: lead.id, designerId })}
                   />
                 ))}
               </tbody>
@@ -341,17 +359,24 @@ export default function LeadsListPage() {
 function LeadRow({
   lead,
   basePath,
+  isAdmin,
+  designers,
   isFollowUpToday,
   onStatusChange,
   onConvert,
+  onAssign,
 }: {
   lead: Lead;
   basePath: string;
+  isAdmin: boolean;
+  designers: User[];
   isFollowUpToday: boolean;
   onStatusChange: () => void;
   onConvert: () => void;
+  onAssign: (designerId: string) => void;
 }) {
   const [showMenu, setShowMenu] = useState(false);
+  const [showAssignMenu, setShowAssignMenu] = useState(false);
   const navigate = useNavigate();
 
   const canConvert = !['converted', 'dropped'].includes(lead.status);
@@ -419,6 +444,62 @@ function LeadRow({
           {getLeadStatusLabel(lead.status, lead.subStatus)}
         </button>
       </td>
+      {isAdmin && (
+        <td onClick={(e) => e.stopPropagation()}>
+          <div className="relative">
+            <button
+              onClick={() => setShowAssignMenu(!showAssignMenu)}
+              className={cn(
+                'text-xs px-2 py-1 rounded-full flex items-center gap-1 hover:opacity-80 transition-opacity',
+                lead.designer
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'bg-gray-100 text-gray-500 border border-dashed border-gray-300'
+              )}
+            >
+              {lead.designer ? (
+                lead.designer.name || lead.designer.email
+              ) : (
+                <>
+                  <UserPlus className="w-3 h-3" />
+                  Assign
+                </>
+              )}
+            </button>
+            {showAssignMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowAssignMenu(false)} />
+                <div className="absolute left-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 max-h-60 overflow-y-auto">
+                  <p className="px-3 py-1.5 text-xs font-medium text-gray-400 uppercase tracking-wider">Assign to</p>
+                  {designers.map((designer) => (
+                    <button
+                      key={designer.id}
+                      onClick={() => {
+                        onAssign(designer.id);
+                        setShowAssignMenu(false);
+                      }}
+                      className={cn(
+                        'w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50',
+                        lead.designerId === designer.id ? 'text-blue-700 bg-blue-50 font-medium' : 'text-gray-700'
+                      )}
+                    >
+                      <span className="w-6 h-6 rounded-full bg-designer-100 text-designer-700 flex items-center justify-center text-xs font-medium">
+                        {(designer.name || designer.email).charAt(0).toUpperCase()}
+                      </span>
+                      {designer.name || designer.email}
+                      {lead.designerId === designer.id && (
+                        <span className="ml-auto text-xs text-blue-500">Current</span>
+                      )}
+                    </button>
+                  ))}
+                  {designers.length === 0 && (
+                    <p className="px-3 py-2 text-sm text-gray-400">No designers available</p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </td>
+      )}
       <td className="text-sm text-gray-500">
         {formatDate(lead.createdAt)}
       </td>

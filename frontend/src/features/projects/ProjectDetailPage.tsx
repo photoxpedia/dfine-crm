@@ -23,6 +23,7 @@ import {
   LayoutTemplate,
   FileSpreadsheet,
   ClipboardCheck,
+  Search,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { projectsApi, estimatesApi } from '@/lib/api';
@@ -31,6 +32,8 @@ import ProjectPaymentsTab from './ProjectPaymentsTab';
 import ProjectMaterialsTab from './ProjectMaterialsTab';
 import ProjectManagementTab from './ProjectManagementTab';
 import ProjectCompletionReport from './ProjectCompletionReport';
+import ProjectPhotosTab from './ProjectPhotosTab';
+import ProjectChangeOrdersTab from './ProjectChangeOrdersTab';
 import type { Project, Estimate, ProjectStatus } from '@/types';
 
 const STATUS_OPTIONS: ProjectStatus[] = [
@@ -50,8 +53,9 @@ export default function ProjectDetailPage() {
   const basePath = getBasePath(location.pathname);
   const queryClient = useQueryClient();
   const [showMenu, setShowMenu] = useState(false);
-  const [activeTab, setActiveTab] = useState<'estimates' | 'materials' | 'management' | 'documents' | 'payments'>('estimates');
+  const [activeTab, setActiveTab] = useState<'estimates' | 'materials' | 'management' | 'photos' | 'change-orders' | 'payments'>('estimates');
   const [showNewEstimateModal, setShowNewEstimateModal] = useState(false);
+  const [showCopyFromModal, setShowCopyFromModal] = useState(false);
   const [showCompletionReport, setShowCompletionReport] = useState(false);
 
   // Fetch project details
@@ -339,15 +343,26 @@ export default function ProjectDetailPage() {
             Project Mgmt
           </button>
           <button
-            onClick={() => setActiveTab('documents')}
+            onClick={() => setActiveTab('photos')}
             className={cn(
               'py-3 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap',
-              activeTab === 'documents'
+              activeTab === 'photos'
                 ? 'border-designer-500 text-designer-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             )}
           >
-            Documents
+            Photos
+          </button>
+          <button
+            onClick={() => setActiveTab('change-orders')}
+            className={cn(
+              'py-3 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap',
+              activeTab === 'change-orders'
+                ? 'border-designer-500 text-designer-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            )}
+          >
+            Change Orders
           </button>
           <button
             onClick={() => setActiveTab('payments')}
@@ -408,12 +423,12 @@ export default function ProjectDetailPage() {
         <ProjectManagementTab projectId={id!} />
       )}
 
-      {activeTab === 'documents' && (
-        <div className="card p-12 text-center">
-          <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Documents</h3>
-          <p className="text-gray-500">Document management coming soon</p>
-        </div>
+      {activeTab === 'photos' && (
+        <ProjectPhotosTab projectId={id!} />
+      )}
+
+      {activeTab === 'change-orders' && (
+        <ProjectChangeOrdersTab projectId={id!} />
       )}
 
       {activeTab === 'payments' && (
@@ -493,6 +508,25 @@ export default function ProjectDetailPage() {
                   </div>
                 </button>
 
+                {/* Copy from Existing Option */}
+                <button
+                  onClick={() => {
+                    setShowNewEstimateModal(false);
+                    setShowCopyFromModal(true);
+                  }}
+                  className="w-full flex items-start gap-4 p-4 border border-gray-200 rounded-lg hover:border-designer-300 hover:bg-designer-50 transition-colors text-left group"
+                >
+                  <div className="p-2 bg-gray-100 rounded-lg group-hover:bg-designer-100">
+                    <Copy className="w-6 h-6 text-gray-600 group-hover:text-designer-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">Copy from Existing</p>
+                    <p className="text-sm text-gray-500 mt-0.5">
+                      Duplicate an estimate from another project
+                    </p>
+                  </div>
+                </button>
+
                 {createEstimateMutation.isPending && (
                   <div className="flex items-center justify-center py-4">
                     <Loader2 className="w-6 h-6 animate-spin text-designer-600" />
@@ -523,6 +557,140 @@ export default function ProjectDetailPage() {
           onClose={() => setShowCompletionReport(false)}
         />
       )}
+
+      {/* Copy from Existing Estimate Modal */}
+      {showCopyFromModal && (
+        <CopyFromEstimateModal
+          projectId={id!}
+          basePath={basePath}
+          onClose={() => setShowCopyFromModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function CopyFromEstimateModal({
+  projectId,
+  basePath,
+  onClose,
+}: {
+  projectId: string;
+  basePath: string;
+  onClose: () => void;
+}) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['estimates', 'recent', projectId],
+    queryFn: async () => {
+      const response = await estimatesApi.listRecent(projectId);
+      return response.data;
+    },
+  });
+
+  const copyMutation = useMutation({
+    mutationFn: async (estimateId: string) => {
+      return estimatesApi.duplicateToProject(estimateId, projectId);
+    },
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['project-estimates', projectId] });
+      toast.success('Estimate copied successfully');
+      onClose();
+      navigate(`${basePath}/estimates/${response.data.id}`);
+    },
+    onError: () => {
+      toast.error('Failed to copy estimate');
+    },
+  });
+
+  const estimates = (data?.estimates || []).filter((est: any) => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      est.project?.name?.toLowerCase().includes(term) ||
+      est.name?.toLowerCase().includes(term)
+    );
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div className="fixed inset-0 bg-gray-500/75 transition-opacity" onClick={onClose} />
+        <div className="relative w-full max-w-lg bg-white rounded-xl shadow-xl">
+          <div className="flex items-center justify-between p-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Copy from Existing Estimate</h2>
+            <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-4">
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search projects..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="input pl-9 text-sm"
+              />
+            </div>
+
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-designer-600" />
+              </div>
+            ) : estimates.length === 0 ? (
+              <div className="text-center py-8">
+                <FileText className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">No estimates found from other projects</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {estimates.map((est: any) => (
+                  <button
+                    key={est.id}
+                    onClick={() => copyMutation.mutate(est.id)}
+                    disabled={copyMutation.isPending}
+                    className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:border-designer-300 hover:bg-designer-50 transition-colors text-left"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-gray-900 text-sm truncate">
+                        {est.project?.name}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {est.name || `v${est.version}`} &middot; {formatCurrency(est.total)} &middot; {est._count?.sections || 0} sections
+                      </p>
+                    </div>
+                    <span className={cn('badge ml-2 text-xs', {
+                      'badge-gray': est.status === 'draft',
+                      'badge-blue': est.status === 'sent' || est.status === 'viewed',
+                      'badge-green': est.status === 'approved',
+                      'badge-red': est.status === 'rejected',
+                    })}>
+                      {est.status}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {copyMutation.isPending && (
+              <div className="flex items-center justify-center py-4 mt-2">
+                <Loader2 className="w-5 h-5 animate-spin text-designer-600" />
+                <span className="ml-2 text-sm text-gray-600">Copying estimate...</span>
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+            <button onClick={onClose} className="w-full btn btn-outline">Cancel</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
