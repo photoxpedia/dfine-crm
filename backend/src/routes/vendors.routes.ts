@@ -52,8 +52,17 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
 
 // Get single vendor
 router.get('/:id', authenticate, async (req: Request, res: Response) => {
-  const vendor = await prisma.vendor.findUnique({
-    where: { id: req.params.id },
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const vendor = await prisma.vendor.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     include: {
       purchaseOrders: {
         include: { project: { select: { id: true, name: true } } },
@@ -102,8 +111,17 @@ router.post('/', authenticate, requireAdmin, async (req: Request, res: Response)
 router.put('/:id', authenticate, requireAdmin, async (req: Request, res: Response) => {
   const data = vendorSchema.partial().parse(req.body);
 
-  const existing = await prisma.vendor.findUnique({
-    where: { id: req.params.id },
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.vendor.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
   });
 
   if (!existing) {
@@ -125,8 +143,17 @@ router.put('/:id', authenticate, requireAdmin, async (req: Request, res: Respons
 
 // Delete vendor
 router.delete('/:id', authenticate, requireAdmin, async (req: Request, res: Response) => {
-  const existing = await prisma.vendor.findUnique({
-    where: { id: req.params.id },
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.vendor.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     include: { _count: { select: { purchaseOrders: true } } },
   });
 

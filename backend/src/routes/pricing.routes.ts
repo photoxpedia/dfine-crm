@@ -59,8 +59,17 @@ router.get('/categories', authenticate, requireDesignerOrAdmin, async (req: Requ
 
 // Get single category
 router.get('/categories/:id', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
-  const category = await prisma.pricingCategory.findUnique({
-    where: { id: req.params.id },
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const category = await prisma.pricingCategory.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     include: {
       items: { orderBy: { sortOrder: 'asc' } },
     },
@@ -108,6 +117,23 @@ router.post('/categories', authenticate, requireAdmin, async (req: Request, res:
 router.put('/categories/:id', authenticate, requireAdmin, async (req: Request, res: Response) => {
   const data = categorySchema.partial().parse(req.body);
 
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.pricingCategory.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
+  });
+  if (!existing) {
+    res.status(404).json({ error: 'Category not found' });
+    return;
+  }
+
   const category = await prisma.pricingCategory.update({
     where: { id: req.params.id },
     data,
@@ -118,6 +144,23 @@ router.put('/categories/:id', authenticate, requireAdmin, async (req: Request, r
 
 // Delete category (admin only)
 router.delete('/categories/:id', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.pricingCategory.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
+  });
+  if (!existing) {
+    res.status(404).json({ error: 'Category not found' });
+    return;
+  }
+
   // Check if category has items
   const itemCount = await prisma.pricingItem.count({
     where: { categoryId: req.params.id },

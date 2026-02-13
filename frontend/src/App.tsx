@@ -10,6 +10,8 @@ import ClientLayout from '@/components/layout/ClientLayout';
 
 // Auth pages
 import LoginPage from '@/features/auth/LoginPage';
+import SignupPage from '@/features/auth/SignupPage';
+import AcceptInvitePage from '@/features/auth/AcceptInvitePage';
 import VerifyPage from '@/features/auth/VerifyPage';
 import ClientInvitePage from '@/features/auth/ClientInvitePage';
 
@@ -41,6 +43,7 @@ import PurchasingPage from '@/features/admin/PurchasingPage';
 import SettingsPage from '@/features/admin/SettingsPage';
 import ContractTemplatesPage from '@/features/admin/ContractTemplatesPage';
 import LeadSourcesPage from '@/features/admin/LeadSourcesPage';
+import TeamPage from '@/features/admin/TeamPage';
 
 // Document pages
 import DocumentsPage from '@/features/documents/DocumentsPage';
@@ -124,6 +127,8 @@ export default function App() {
     <Routes>
       {/* Public routes */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignupPage />} />
+      <Route path="/invite/accept" element={<AcceptInvitePage />} />
       <Route path="/auth/verify" element={<VerifyPage />} />
       <Route path="/client/invite" element={<ClientInvitePage />} />
       <Route path="/estimate/approve/:token" element={<EstimateApprovalPage />} />
@@ -156,6 +161,7 @@ export default function App() {
         <Route path="crews" element={<CrewsPage />} />
         <Route path="contracts" element={<ContractTemplatesPage />} />
         <Route path="lead-sources" element={<LeadSourcesPage />} />
+        <Route path="team" element={<TeamPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 

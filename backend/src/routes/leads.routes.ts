@@ -3,6 +3,7 @@ import { z } from 'zod';
 import fs from 'fs';
 import prisma from '../config/database.js';
 import { authenticate, requireDesignerOrAdmin, requireAdmin } from '../middleware/auth.js';
+import { requireActiveSubscription, requirePlanLimit } from '../middleware/subscription.js';
 import { LeadStatus, SubStatus, FollowUpReason, ProjectType, PhotoTag } from '@prisma/client';
 import { createLeadHistory, getLeadHistory } from '../services/leadHistory.service.js';
 import { createNotification } from '../services/notification.service.js';
@@ -117,8 +118,18 @@ router.get('/', authenticate, requireDesignerOrAdmin, async (req: Request, res: 
 
 // Get single lead with history
 router.get('/:id', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
-  const lead = await prisma.lead.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const lead = await prisma.lead.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     include: {
       designer: { select: { id: true, name: true, email: true } },
       projects: {
@@ -157,7 +168,7 @@ router.get('/:id', authenticate, requireDesignerOrAdmin, async (req: Request, re
 });
 
 // Create lead
-router.post('/', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+router.post('/', authenticate, requireDesignerOrAdmin, requireActiveSubscription, requirePlanLimit('leads'), async (req: Request, res: Response) => {
   const data = createLeadSchema.parse(req.body);
 
   // Get user's organization
@@ -198,9 +209,19 @@ router.post('/', authenticate, requireDesignerOrAdmin, async (req: Request, res:
 router.put('/:id', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
   const data = updateLeadSchema.parse(req.body);
 
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
   // Check access
-  const existing = await prisma.lead.findUnique({
-    where: { id: req.params.id },
+  const existing = await prisma.lead.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     select: { designerId: true },
   });
 
@@ -229,8 +250,18 @@ router.put('/:id', authenticate, requireDesignerOrAdmin, async (req: Request, re
 router.patch('/:id/status', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
   const data = statusChangeSchema.parse(req.body);
 
-  const existing = await prisma.lead.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.lead.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
   });
 
   if (!existing) {
@@ -330,8 +361,18 @@ router.patch('/:id/status', authenticate, requireDesignerOrAdmin, async (req: Re
 router.patch('/:id/assign', authenticate, requireAdmin, async (req: Request, res: Response) => {
   const { designerId } = z.object({ designerId: z.string().uuid() }).parse(req.body);
 
-  const existing = await prisma.lead.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.lead.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     include: {
       designer: { select: { id: true, name: true } },
     },
@@ -397,8 +438,18 @@ router.patch('/:id/assign', authenticate, requireAdmin, async (req: Request, res
 router.post('/:id/notes', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
   const { note } = addNoteSchema.parse(req.body);
 
-  const existing = await prisma.lead.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.lead.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     select: { id: true, designerId: true },
   });
 
@@ -426,8 +477,18 @@ router.post('/:id/notes', authenticate, requireDesignerOrAdmin, async (req: Requ
 router.post('/:id/contact', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
   const { contactType, note } = logContactSchema.parse(req.body);
 
-  const existing = await prisma.lead.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.lead.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     select: { id: true, designerId: true },
   });
 
@@ -456,8 +517,18 @@ router.post('/:id/contact', authenticate, requireDesignerOrAdmin, async (req: Re
 router.get('/:id/history', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
   const { limit = '50', offset = '0' } = req.query;
 
-  const existing = await prisma.lead.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.lead.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     select: { id: true, designerId: true },
   });
 
@@ -487,8 +558,18 @@ router.post(
   requireDesignerOrAdmin,
   uploadLeadPhotos.array('photos', 20),
   async (req: Request, res: Response) => {
-    const existing = await prisma.lead.findUnique({
-      where: { id: req.params.id },
+    // Get user's org
+    const userOrg = await prisma.organizationMember.findFirst({
+      where: { userId: req.user!.id, isDefault: true },
+      select: { organizationId: true },
+    });
+    if (!userOrg) {
+      res.status(400).json({ error: 'User must belong to an organization' });
+      return;
+    }
+
+    const existing = await prisma.lead.findFirst({
+      where: { id: req.params.id, organizationId: userOrg.organizationId },
       select: { id: true, designerId: true },
     });
 
@@ -549,8 +630,18 @@ router.post(
 
 // Get lead photos
 router.get('/:id/photos', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
-  const existing = await prisma.lead.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.lead.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     select: { id: true, designerId: true },
   });
 
@@ -577,8 +668,18 @@ router.get('/:id/photos', authenticate, requireDesignerOrAdmin, async (req: Requ
 
 // Delete photo
 router.delete('/:id/photos/:photoId', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
-  const existing = await prisma.lead.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.lead.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     select: { id: true, designerId: true },
   });
 
@@ -621,8 +722,18 @@ router.delete('/:id/photos/:photoId', authenticate, requireDesignerOrAdmin, asyn
 
 // Convert lead to project
 router.post('/:id/convert', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
-  const lead = await prisma.lead.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const lead = await prisma.lead.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
   });
 
   if (!lead) {
@@ -702,8 +813,18 @@ router.post('/:id/convert', authenticate, requireDesignerOrAdmin, async (req: Re
 
 // Delete lead
 router.delete('/:id', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
-  const existing = await prisma.lead.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.lead.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     select: { designerId: true },
   });
 

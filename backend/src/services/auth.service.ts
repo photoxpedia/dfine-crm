@@ -308,6 +308,100 @@ export async function verifyClientInvite(token: string): Promise<VerifyResult> {
   };
 }
 
+// ==================== REGISTRATION ====================
+
+export async function registerUser(data: {
+  name: string;
+  email: string;
+  password: string;
+  companyName: string;
+}): Promise<VerifyResult> {
+  const normalizedEmail = data.email.toLowerCase().trim();
+
+  // Check if email already taken
+  const existing = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+  });
+  if (existing) {
+    return { success: false, message: 'An account with this email already exists.' };
+  }
+
+  // Generate slug from company name
+  const slug = data.companyName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 50);
+
+  // Check slug uniqueness
+  const existingOrg = await prisma.organization.findUnique({ where: { slug } });
+  const finalSlug = existingOrg ? `${slug}-${Date.now().toString(36)}` : slug;
+
+  // Create user, org, and membership in one transaction
+  const result = await prisma.$transaction(async (tx) => {
+    // Hash password
+    const passwordHash = await bcrypt.hash(data.password, SALT_ROUNDS);
+
+    // Create organization
+    const organization = await tx.organization.create({
+      data: {
+        name: data.companyName,
+        slug: finalSlug,
+        subscriptionPlan: 'starter',
+        subscriptionStatus: 'trialing',
+        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
+      },
+    });
+
+    // Create user as admin of the org
+    const user = await tx.user.create({
+      data: {
+        email: normalizedEmail,
+        name: data.name,
+        role: 'admin' as UserRole,
+        passwordHash,
+      },
+    });
+
+    // Create org membership
+    await tx.organizationMember.create({
+      data: {
+        organizationId: organization.id,
+        userId: user.id,
+        role: 'owner',
+        isDefault: true,
+      },
+    });
+
+    // Create default lead sources for the org
+    const defaultSources = ['Website', 'Referral', 'Social Media', 'Home Show', 'Google', 'Yelp', 'Other'];
+    for (const sourceName of defaultSources) {
+      await tx.leadSource.create({
+        data: {
+          organizationId: organization.id,
+          name: sourceName,
+          isActive: true,
+        },
+      });
+    }
+
+    return user;
+  });
+
+  const authUser: AuthUser = {
+    id: result.id,
+    email: result.email,
+    name: result.name,
+    role: result.role,
+  };
+
+  return {
+    success: true,
+    user: authUser,
+    token: generateToken(authUser),
+  };
+}
+
 // ==================== PASSWORD AUTH ====================
 
 export async function hashPassword(password: string): Promise<string> {

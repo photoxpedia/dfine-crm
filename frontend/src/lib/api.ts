@@ -38,6 +38,9 @@ export default api;
 
 // Auth API
 export const authApi = {
+  register: (data: { name: string; email: string; password: string; companyName: string }) =>
+    api.post('/auth/register', data),
+
   login: (email: string, password: string) =>
     api.post('/auth/login', { email, password }),
 
@@ -547,6 +550,46 @@ export const reportsApi = {
 
   markProjectCompleted: (projectId: string) =>
     api.post(`/reports/projects/${projectId}/complete`),
+};
+
+// Organization API
+export const organizationApi = {
+  get: () => api.get('/organization'),
+
+  update: (data: {
+    name?: string;
+    website?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    zip?: string | null;
+  }) => api.put('/organization', data),
+
+  // Members
+  listMembers: () => api.get('/organization/members'),
+
+  updateMemberRole: (memberId: string, role: string) =>
+    api.put(`/organization/members/${memberId}`, { role }),
+
+  removeMember: (memberId: string) =>
+    api.delete(`/organization/members/${memberId}`),
+
+  // Invites
+  listInvites: () => api.get('/organization/invites'),
+
+  sendInvite: (data: { email: string; role?: string; userRole?: string }) =>
+    api.post('/organization/invites', data),
+
+  revokeInvite: (inviteId: string) =>
+    api.delete(`/organization/invites/${inviteId}`),
+
+  verifyInvite: (token: string) =>
+    api.get(`/organization/invites/verify?token=${token}`),
+
+  acceptInvite: (data: { token: string; name: string; password: string }) =>
+    api.post('/organization/invites/accept', data),
 };
 
 // Users API

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -253,7 +253,13 @@ export default function LoginPage() {
             </>
           )}
 
-          <div className="mt-6 text-center">
+          <div className="mt-6 text-center space-y-2">
+            <p className="text-sm text-gray-500">
+              Don't have an account?{' '}
+              <Link to="/signup" className="text-designer-600 hover:text-designer-700 font-medium">
+                Create one free
+              </Link>
+            </p>
             <p className="text-sm text-gray-500">
               Are you a client?{' '}
               <span className="text-gray-700">

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../config/database.js';
 import { authenticate, requireDesignerOrAdmin } from '../middleware/auth.js';
+import { requireActiveSubscription, requirePlanLimit } from '../middleware/subscription.js';
 import { ProjectStatus, ProjectType } from '@prisma/client';
 
 const router = Router();
@@ -110,8 +111,18 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
 
 // Get single project with full details
 router.get('/:id', authenticate, async (req: Request, res: Response) => {
-  const project = await prisma.project.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const project = await prisma.project.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     include: {
       lead: true,
       designer: { select: { id: true, name: true, email: true, phone: true } },
@@ -171,7 +182,7 @@ router.get('/:id', authenticate, async (req: Request, res: Response) => {
 });
 
 // Create project
-router.post('/', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
+router.post('/', authenticate, requireDesignerOrAdmin, requireActiveSubscription, requirePlanLimit('projects'), async (req: Request, res: Response) => {
   const data = createProjectSchema.parse(req.body);
 
   const userOrg = await prisma.organizationMember.findFirst({
@@ -204,8 +215,18 @@ router.post('/', authenticate, requireDesignerOrAdmin, async (req: Request, res:
 router.put('/:id', authenticate, async (req: Request, res: Response) => {
   const data = updateProjectSchema.parse(req.body);
 
-  const existing = await prisma.project.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.project.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     select: { designerId: true },
   });
 
@@ -245,8 +266,18 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
 router.patch('/:id/status', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
   const { status } = z.object({ status: z.nativeEnum(ProjectStatus) }).parse(req.body);
 
-  const existing = await prisma.project.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.project.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     select: { designerId: true },
   });
 
@@ -270,8 +301,18 @@ router.patch('/:id/status', authenticate, requireDesignerOrAdmin, async (req: Re
 
 // Get project timeline/activity
 router.get('/:id/timeline', authenticate, async (req: Request, res: Response) => {
-  const project = await prisma.project.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const project = await prisma.project.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     select: { id: true, designerId: true, clientId: true },
   });
 
@@ -303,8 +344,18 @@ router.get('/:id/timeline', authenticate, async (req: Request, res: Response) =>
 
 // Delete project
 router.delete('/:id', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
-  const existing = await prisma.project.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.project.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     select: { designerId: true, status: true },
   });
 

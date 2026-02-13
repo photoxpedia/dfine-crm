@@ -63,8 +63,18 @@ router.get('/', authenticate, requireDesignerOrAdmin, async (req: Request, res: 
 
 // Get single crew
 router.get('/:id', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
-  const crew = await prisma.crew.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const crew = await prisma.crew.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     include: {
       assignments: {
         include: {
@@ -125,8 +135,18 @@ router.post('/', authenticate, requireAdmin, async (req: Request, res: Response)
 router.put('/:id', authenticate, requireAdmin, async (req: Request, res: Response) => {
   const data = updateCrewSchema.parse(req.body);
 
-  const existing = await prisma.crew.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.crew.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
   });
 
   if (!existing) {
@@ -144,8 +164,18 @@ router.put('/:id', authenticate, requireAdmin, async (req: Request, res: Respons
 
 // Toggle crew active status
 router.patch('/:id/toggle-active', authenticate, requireAdmin, async (req: Request, res: Response) => {
-  const existing = await prisma.crew.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.crew.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
   });
 
   if (!existing) {
@@ -163,8 +193,18 @@ router.patch('/:id/toggle-active', authenticate, requireAdmin, async (req: Reque
 
 // Delete crew
 router.delete('/:id', authenticate, requireAdmin, async (req: Request, res: Response) => {
-  const existing = await prisma.crew.findUnique({
-    where: { id: req.params.id },
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const existing = await prisma.crew.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
     include: { _count: { select: { assignments: true, laborLogs: true } } },
   });
 
@@ -191,13 +231,23 @@ router.delete('/:id', authenticate, requireAdmin, async (req: Request, res: Resp
 router.post('/:id/assign', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
   const { projectId, role, startDate, endDate, notes } = req.body;
 
-  const crew = await prisma.crew.findUnique({ where: { id: req.params.id } });
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const crew = await prisma.crew.findFirst({ where: { id: req.params.id, organizationId: userOrg.organizationId } });
   if (!crew) {
     res.status(404).json({ error: 'Crew not found' });
     return;
   }
 
-  const project = await prisma.project.findUnique({ where: { id: projectId } });
+  const project = await prisma.project.findFirst({ where: { id: projectId, organizationId: userOrg.organizationId } });
   if (!project) {
     res.status(404).json({ error: 'Project not found' });
     return;
@@ -225,7 +275,17 @@ router.post('/:id/assign', authenticate, requireDesignerOrAdmin, async (req: Req
 router.post('/:id/labor', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
   const { projectId, date, hoursWorked, description } = req.body;
 
-  const crew = await prisma.crew.findUnique({ where: { id: req.params.id } });
+  // Get user's org
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const crew = await prisma.crew.findFirst({ where: { id: req.params.id, organizationId: userOrg.organizationId } });
   if (!crew) {
     res.status(404).json({ error: 'Crew not found' });
     return;

@@ -21,6 +21,7 @@ import contractsRoutes from './routes/contracts.routes.js';
 import projectManagementRoutes from './routes/project-management.routes.js';
 import reportsRoutes from './routes/reports.routes.js';
 import leadSourcesRoutes from './routes/lead-sources.routes.js';
+import organizationRoutes from './routes/organization.routes.js';
 import notificationsRoutes from './routes/notifications.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 
@@ -60,6 +61,7 @@ app.use('/api/contracts', contractsRoutes);
 app.use('/api/projects', projectManagementRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/lead-sources', leadSourcesRoutes);
+app.use('/api/organization', organizationRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 

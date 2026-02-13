@@ -75,8 +75,17 @@ router.get('/templates', authenticate, requireDesignerOrAdmin, async (req: Reque
 
 // Get single contract template
 router.get('/templates/:id', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {
-  const template = await prisma.contractTemplate.findUnique({
-    where: { id: req.params.id },
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const template = await prisma.contractTemplate.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
   });
 
   if (!template) {
@@ -156,8 +165,17 @@ router.put('/templates/:id', authenticate, requireAdmin, upload.single('pdf'), a
   try {
     const { name, description, fieldMappings, isActive, isDefault } = req.body;
 
-    const existing = await prisma.contractTemplate.findUnique({
-      where: { id: req.params.id },
+    const userOrg = await prisma.organizationMember.findFirst({
+      where: { userId: req.user!.id, isDefault: true },
+      select: { organizationId: true },
+    });
+    if (!userOrg) {
+      res.status(400).json({ error: 'User must belong to an organization' });
+      return;
+    }
+
+    const existing = await prisma.contractTemplate.findFirst({
+      where: { id: req.params.id, organizationId: userOrg.organizationId },
     });
 
     if (!existing) {
@@ -218,8 +236,17 @@ router.put('/templates/:id', authenticate, requireAdmin, upload.single('pdf'), a
 
 // Delete contract template (admin only)
 router.delete('/templates/:id', authenticate, requireAdmin, async (req: Request, res: Response) => {
-  const template = await prisma.contractTemplate.findUnique({
-    where: { id: req.params.id },
+  const userOrg = await prisma.organizationMember.findFirst({
+    where: { userId: req.user!.id, isDefault: true },
+    select: { organizationId: true },
+  });
+  if (!userOrg) {
+    res.status(400).json({ error: 'User must belong to an organization' });
+    return;
+  }
+
+  const template = await prisma.contractTemplate.findFirst({
+    where: { id: req.params.id, organizationId: userOrg.organizationId },
   });
 
   if (!template) {

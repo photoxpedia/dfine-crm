@@ -23,9 +23,43 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(8, 'New password must be at least 8 characters'),
 });
 
+const registerSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  companyName: z.string().min(1, 'Company name is required'),
+});
+
 const clientInviteSchema = z.object({
   projectId: z.string().uuid('Invalid project ID'),
   email: z.string().email('Invalid email address'),
+});
+
+// Register new user + organization
+router.post('/register', async (req: Request, res: Response) => {
+  try {
+    const data = registerSchema.parse(req.body);
+    const result = await authService.registerUser(data);
+
+    if (result.success && result.token) {
+      res.cookie('token', result.token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+
+      res.status(201).json({ user: result.user, token: result.token });
+    } else {
+      res.status(400).json({ error: result.message });
+    }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: error.errors[0].message });
+    } else {
+      throw error;
+    }
+  }
 });
 
 // Request magic link

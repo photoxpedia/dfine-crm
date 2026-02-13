@@ -15,6 +15,7 @@ import {
   HardHat,
   FileText,
   Tag,
+  UserPlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
@@ -31,6 +32,7 @@ const navigation = [
   { name: 'Crews', href: '/admin/crews', icon: HardHat },
   { name: 'Contracts', href: '/admin/contracts', icon: FileText },
   { name: 'Lead Sources', href: '/admin/lead-sources', icon: Tag },
+  { name: 'Team', href: '/admin/team', icon: UserPlus },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 
