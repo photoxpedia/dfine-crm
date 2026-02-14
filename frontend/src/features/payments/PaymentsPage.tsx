@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   CreditCard,
@@ -6,8 +7,10 @@ import {
   AlertCircle,
   DollarSign,
   Loader2,
+  ExternalLink,
+  Banknote,
 } from 'lucide-react';
-import { paymentsApi, projectsApi } from '@/lib/api';
+import { paymentsApi, projectsApi, stripePaymentsApi } from '@/lib/api';
 import { formatDate, formatCurrency, cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 
@@ -41,9 +44,18 @@ const statusIcons: Record<PaymentStatus, React.ReactNode> = {
   overdue: <AlertCircle className="w-4 h-4" />,
 };
 
+const paymentMethodBadge: Record<string, { label: string; className: string }> = {
+  stripe: { label: 'Card (Stripe)', className: 'bg-purple-100 text-purple-700' },
+  manual: { label: 'Manual', className: 'bg-gray-100 text-gray-700' },
+  cash: { label: 'Cash', className: 'bg-green-100 text-green-700' },
+  check: { label: 'Check', className: 'bg-blue-100 text-blue-700' },
+  bank_transfer: { label: 'Bank Transfer', className: 'bg-indigo-100 text-indigo-700' },
+};
+
 export default function PaymentsPage() {
   const { user } = useAuthStore();
   const isClient = user?.role === 'client';
+  const [payingScheduleId, setPayingScheduleId] = useState<string | null>(null);
 
   // For clients, fetch their projects first
   const { data: projectsData, isLoading: projectsLoading } = useQuery({
@@ -68,7 +80,7 @@ export default function PaymentsPage() {
     enabled: !!firstProject?.id,
   });
 
-  const schedule = paymentsData?.schedule || [];
+  const schedule = paymentsData?.schedule || paymentsData?.schedules || [];
   const isLoading = projectsLoading || paymentsLoading;
 
   // Calculate totals
@@ -77,6 +89,21 @@ export default function PaymentsPage() {
     .filter((item: any) => item.status === 'completed')
     .reduce((sum: number, item: any) => sum + Number(item.amountDue), 0);
   const pendingAmount = totalAmount - paidAmount;
+
+  const handlePayNow = async (scheduleId: string) => {
+    try {
+      setPayingScheduleId(scheduleId);
+      const response = await stripePaymentsApi.createCheckout(scheduleId);
+      const { sessionUrl } = response.data;
+      if (sessionUrl) {
+        window.location.href = sessionUrl;
+      }
+    } catch (error: any) {
+      console.error('Payment error:', error);
+      alert(error.response?.data?.error || 'Failed to start payment. Please try again.');
+      setPayingScheduleId(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -173,7 +200,7 @@ export default function PaymentsPage() {
                       </p>
                       <p className="text-sm text-gray-500">
                         {item.percentage}% of total
-                        {item.dueDate && ` • Due ${formatDate(item.dueDate)}`}
+                        {item.dueDate && ` · Due ${formatDate(item.dueDate)}`}
                       </p>
                     </div>
                   </div>
@@ -192,8 +219,17 @@ export default function PaymentsPage() {
                       </span>
                     </div>
 
-                    {item.status === 'pending' && isClient && (
-                      <button className="btn btn-client btn-sm">
+                    {(item.status === 'pending' || item.status === 'invoiced') && isClient && (
+                      <button
+                        onClick={() => handlePayNow(item.id)}
+                        disabled={payingScheduleId === item.id}
+                        className="btn btn-client btn-sm flex items-center gap-1.5"
+                      >
+                        {payingScheduleId === item.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <ExternalLink className="w-4 h-4" />
+                        )}
                         Pay Now
                       </button>
                     )}
@@ -207,9 +243,14 @@ export default function PaymentsPage() {
                       <div key={payment.id} className="py-2 flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2 text-gray-600">
                           <CheckCircle className="w-4 h-4 text-green-500" />
-                          <span>Paid {formatDate(payment.paidAt)}</span>
+                          <span>Paid {payment.paidAt ? formatDate(payment.paidAt) : ''}</span>
                           {payment.paymentMethod && (
-                            <span className="text-gray-400">via {payment.paymentMethod}</span>
+                            <span className={cn(
+                              'inline-flex px-1.5 py-0.5 rounded text-xs font-medium',
+                              paymentMethodBadge[payment.paymentMethod]?.className || 'bg-gray-100 text-gray-600'
+                            )}>
+                              {paymentMethodBadge[payment.paymentMethod]?.label || payment.paymentMethod}
+                            </span>
                           )}
                         </div>
                         <span className="font-medium">{formatCurrency(payment.amount)}</span>
@@ -232,12 +273,16 @@ export default function PaymentsPage() {
             <span>Credit/Debit Card</span>
           </div>
           <div className="flex items-center gap-2 text-gray-600">
-            <DollarSign className="w-5 h-5" />
+            <Banknote className="w-5 h-5" />
             <span>Bank Transfer</span>
+          </div>
+          <div className="flex items-center gap-2 text-gray-600">
+            <DollarSign className="w-5 h-5" />
+            <span>Cash / Check</span>
           </div>
         </div>
         <p className="mt-3 text-sm text-gray-500">
-          Secure payments powered by Square. For questions about payments, please contact your designer.
+          Secure online payments powered by Stripe. For offline payments, please contact your designer.
         </p>
       </div>
     </div>

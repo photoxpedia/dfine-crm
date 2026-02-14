@@ -601,3 +601,33 @@ export const usersApi = {
 
   getDesigners: () => api.get('/users', { params: { role: 'designer' } }),
 };
+
+// Super Admin API
+export const superAdminApi = {
+  getStats: () => api.get('/super-admin/stats'),
+
+  // Organizations
+  listOrganizations: (params?: { search?: string; plan?: string; status?: string; page?: number; limit?: number }) =>
+    api.get('/super-admin/organizations', { params }),
+
+  getOrganization: (id: string) => api.get(`/super-admin/organizations/${id}`),
+
+  updateOrganization: (id: string, data: { name?: string; subscriptionPlan?: string; subscriptionStatus?: string }) =>
+    api.put(`/super-admin/organizations/${id}`, data),
+
+  // Users
+  listUsers: (params?: { search?: string; role?: string; isActive?: string; page?: number; limit?: number }) =>
+    api.get('/super-admin/users', { params }),
+
+  updateUser: (id: string, data: { isActive?: boolean; role?: string }) =>
+    api.put(`/super-admin/users/${id}`, data),
+
+  impersonateUser: (id: string) =>
+    api.post(`/super-admin/users/${id}/impersonate`),
+};
+
+// Stripe Payments API (client-facing)
+export const stripePaymentsApi = {
+  createCheckout: (scheduleId: string) =>
+    api.post(`/payments/checkout/${scheduleId}`),
+};

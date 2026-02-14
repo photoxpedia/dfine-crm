@@ -2,42 +2,26 @@ import { useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
+  Building2,
   Users,
-  FolderKanban,
-  DollarSign,
-  ShoppingCart,
-  Settings,
   LogOut,
   Menu,
   X,
   ChevronDown,
-  Building2,
-  HardHat,
-  FileText,
-  Tag,
-  UserPlus,
+  ArrowLeft,
   Shield,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/lib/api';
-import NotificationBell from './NotificationBell';
 
 const navigation = [
-  { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-  { name: 'Users', href: '/admin/users', icon: Users },
-  { name: 'Projects', href: '/admin/projects', icon: FolderKanban },
-  { name: 'Pricing', href: '/admin/pricing', icon: DollarSign },
-  { name: 'Purchasing', href: '/admin/purchasing', icon: ShoppingCart },
-  { name: 'Vendors', href: '/admin/vendors', icon: Building2 },
-  { name: 'Crews', href: '/admin/crews', icon: HardHat },
-  { name: 'Contracts', href: '/admin/contracts', icon: FileText },
-  { name: 'Lead Sources', href: '/admin/lead-sources', icon: Tag },
-  { name: 'Team', href: '/admin/team', icon: UserPlus },
-  { name: 'Settings', href: '/admin/settings', icon: Settings },
+  { name: 'Dashboard', href: '/super-admin', icon: LayoutDashboard },
+  { name: 'Organizations', href: '/super-admin/organizations', icon: Building2 },
+  { name: 'Users', href: '/super-admin/users', icon: Users },
 ];
 
-export default function AdminLayout() {
+export default function SuperAdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const navigate = useNavigate();
@@ -62,22 +46,22 @@ export default function AdminLayout() {
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - Dark slate theme to distinguish from admin */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-gray-900 transform transition-transform duration-200 ease-in-out lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-64 bg-slate-950 transform transition-transform duration-200 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="flex h-16 items-center justify-between px-6 border-b border-gray-800">
-          <Link to="/admin" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-admin-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">D</span>
+        <div className="flex h-16 items-center justify-between px-6 border-b border-slate-800">
+          <Link to="/super-admin" className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
+              <Shield className="w-4 h-4 text-white" />
             </div>
-            <span className="text-white font-semibold">D'Fine CRM</span>
+            <span className="text-white font-semibold">Super Admin</span>
           </Link>
           <button
-            className="lg:hidden text-gray-400 hover:text-white"
+            className="lg:hidden text-slate-400 hover:text-white"
             onClick={() => setSidebarOpen(false)}
           >
             <X className="w-5 h-5" />
@@ -85,26 +69,17 @@ export default function AdminLayout() {
         </div>
 
         <nav className="mt-6 px-3">
-          {user?.isSuperAdmin && (
-            <NavLink
-              to="/super-admin"
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium mb-3 transition-colors bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 border border-amber-600/30"
-            >
-              <Shield className="w-5 h-5" />
-              Super Admin
-            </NavLink>
-          )}
           {navigation.map((item) => (
             <NavLink
               key={item.name}
               to={item.href}
-              end={item.href === '/admin'}
+              end={item.href === '/super-admin'}
               className={({ isActive }) =>
                 cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium mb-1 transition-colors',
                   isActive
-                    ? 'bg-admin-600 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    ? 'bg-amber-600 text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
                 )
               }
             >
@@ -114,10 +89,18 @@ export default function AdminLayout() {
           ))}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-gray-800">
+        {/* Back to Admin + Sign Out */}
+        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-slate-800 space-y-1">
+          <Link
+            to="/admin"
+            className="flex items-center gap-3 px-3 py-2.5 w-full rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            Back to Admin
+          </Link>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 px-3 py-2.5 w-full rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-3 px-3 py-2.5 w-full rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
           >
             <LogOut className="w-5 h-5" />
             Sign Out
@@ -127,33 +110,35 @@ export default function AdminLayout() {
 
       {/* Main content */}
       <div className="lg:pl-64">
-        {/* Top navbar */}
-        <header className="sticky top-0 z-40 bg-white border-b border-gray-200">
+        {/* Top navbar - Dark theme header */}
+        <header className="sticky top-0 z-40 bg-slate-900 border-b border-slate-800">
           <div className="flex h-16 items-center justify-between px-4 sm:px-6">
             <button
-              className="lg:hidden text-gray-500 hover:text-gray-700"
+              className="lg:hidden text-slate-400 hover:text-white"
               onClick={() => setSidebarOpen(true)}
             >
               <Menu className="w-6 h-6" />
             </button>
 
-            <div className="flex-1 lg:ml-0" />
+            <div className="flex items-center gap-2 lg:ml-0">
+              <span className="hidden lg:inline-block text-xs font-medium px-2 py-1 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                SUPER ADMIN
+              </span>
+            </div>
 
             <div className="flex items-center gap-4">
-              <NotificationBell basePath="/admin" />
-
               <div className="relative">
                 <button
                   className="flex items-center gap-2 text-sm"
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
                 >
-                  <div className="w-8 h-8 bg-admin-100 text-admin-700 rounded-full flex items-center justify-center font-medium">
-                    {user?.name?.charAt(0) || 'A'}
+                  <div className="w-8 h-8 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center font-medium">
+                    {user?.name?.charAt(0) || 'S'}
                   </div>
-                  <span className="hidden sm:block font-medium text-gray-700">
+                  <span className="hidden sm:block font-medium text-slate-200">
                     {user?.name}
                   </span>
-                  <ChevronDown className="w-4 h-4 text-gray-500" />
+                  <ChevronDown className="w-4 h-4 text-slate-400" />
                 </button>
 
                 {userMenuOpen && (
@@ -168,11 +153,11 @@ export default function AdminLayout() {
                         <p className="text-xs text-gray-500">{user?.email}</p>
                       </div>
                       <Link
-                        to="/admin/settings"
+                        to="/admin"
                         className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         onClick={() => setUserMenuOpen(false)}
                       >
-                        Settings
+                        Back to Admin
                       </Link>
                       <button
                         onClick={handleLogout}

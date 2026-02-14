@@ -132,12 +132,19 @@ export async function verifyMagicLink(token: string): Promise<VerifyResult> {
     data: { usedAt: new Date() },
   });
 
+  // Get full user data including isSuperAdmin
+  const fullUser = await prisma.user.findUnique({
+    where: { id: magicLink.user.id },
+    select: { id: true, email: true, name: true, role: true, isSuperAdmin: true },
+  });
+
   // Generate JWT
   const authUser: AuthUser = {
     id: magicLink.user.id,
     email: magicLink.user.email,
     name: magicLink.user.name,
     role: magicLink.user.role,
+    isSuperAdmin: fullUser?.isSuperAdmin || false,
   };
 
   const jwtToken = generateToken(authUser);
@@ -248,11 +255,16 @@ export async function verifyClientInvite(token: string): Promise<VerifyResult> {
     });
 
     if (user) {
+      const fullUser = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { isSuperAdmin: true },
+      });
       const authUser: AuthUser = {
         id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
+        isSuperAdmin: fullUser?.isSuperAdmin || false,
       };
       return {
         success: true,
@@ -299,6 +311,7 @@ export async function verifyClientInvite(token: string): Promise<VerifyResult> {
     email: user.email,
     name: user.name,
     role: user.role,
+    isSuperAdmin: false,
   };
 
   return {
@@ -393,6 +406,7 @@ export async function registerUser(data: {
     email: result.email,
     name: result.name,
     role: result.role,
+    isSuperAdmin: false,
   };
 
   return {
@@ -423,6 +437,7 @@ export async function loginWithPassword(email: string, password: string): Promis
       name: true,
       role: true,
       isActive: true,
+      isSuperAdmin: true,
       passwordHash: true
     },
   });
@@ -445,6 +460,7 @@ export async function loginWithPassword(email: string, password: string): Promis
     email: user.email,
     name: user.name,
     role: user.role,
+    isSuperAdmin: user.isSuperAdmin || false,
   };
 
   return {

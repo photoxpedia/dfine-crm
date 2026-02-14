@@ -445,6 +445,7 @@ router.post('/invites/accept', async (req: Request, res: Response) => {
     email: result.email,
     name: result.name,
     role: result.role,
+    isSuperAdmin: false,
   };
 
   const jwtToken = generateToken(authUser);

@@ -8,6 +8,7 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  isSuperAdmin?: boolean;
 }
 
 interface AuthState {
@@ -66,3 +67,4 @@ export const useUser = () => useAuthStore((state) => state.user);
 export const useIsAdmin = () => useAuthStore((state) => state.user?.role === 'admin');
 export const useIsDesigner = () => useAuthStore((state) => state.user?.role === 'designer');
 export const useIsClient = () => useAuthStore((state) => state.user?.role === 'client');
+export const useIsSuperAdmin = () => useAuthStore((state) => state.user?.isSuperAdmin === true);

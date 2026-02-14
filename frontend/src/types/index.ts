@@ -8,6 +8,7 @@ export interface User {
   role: UserRole;
   phone?: string;
   avatarUrl?: string;
+  isSuperAdmin?: boolean;
   createdAt: string;
   updatedAt?: string;
 }

@@ -7,6 +7,7 @@ import { authApi } from '@/lib/api';
 import AdminLayout from '@/components/layout/AdminLayout';
 import DesignerLayout from '@/components/layout/DesignerLayout';
 import ClientLayout from '@/components/layout/ClientLayout';
+import SuperAdminLayout from '@/components/layout/SuperAdminLayout';
 
 // Auth pages
 import LoginPage from '@/features/auth/LoginPage';
@@ -50,6 +51,14 @@ import DocumentsPage from '@/features/documents/DocumentsPage';
 
 // Payment pages
 import PaymentsPage from '@/features/payments/PaymentsPage';
+import PaymentSuccessPage from '@/features/payments/PaymentSuccessPage';
+import PaymentCancelPage from '@/features/payments/PaymentCancelPage';
+
+// Super Admin pages
+import SADashboard from '@/features/super-admin/SADashboard';
+import SAOrganizationsPage from '@/features/super-admin/SAOrganizationsPage';
+import SAOrganizationDetailPage from '@/features/super-admin/SAOrganizationDetailPage';
+import SAUsersPage from '@/features/super-admin/SAUsersPage';
 
 // Project form
 import ProjectFormPage from '@/features/projects/ProjectFormPage';
@@ -58,9 +67,11 @@ import ProjectFormPage from '@/features/projects/ProjectFormPage';
 function ProtectedRoute({
   children,
   allowedRoles,
+  requireSuperAdmin,
 }: {
   children: React.ReactNode;
   allowedRoles: string[];
+  requireSuperAdmin?: boolean;
 }) {
   const { user, isAuthenticated, isLoading } = useAuthStore();
 
@@ -76,7 +87,11 @@ function ProtectedRoute({
     return <Navigate to="/login" replace />;
   }
 
-  if (!allowedRoles.includes(user.role)) {
+  if (requireSuperAdmin && !user.isSuperAdmin) {
+    return <Navigate to="/admin" replace />;
+  }
+
+  if (!requireSuperAdmin && !allowedRoles.includes(user.role)) {
     // Redirect to appropriate dashboard based on role
     switch (user.role) {
       case 'admin':
@@ -132,6 +147,25 @@ export default function App() {
       <Route path="/auth/verify" element={<VerifyPage />} />
       <Route path="/client/invite" element={<ClientInvitePage />} />
       <Route path="/estimate/approve/:token" element={<EstimateApprovalPage />} />
+
+      {/* Payment result pages (public - user redirected back from Stripe) */}
+      <Route path="/payment/success" element={<PaymentSuccessPage />} />
+      <Route path="/payment/cancel" element={<PaymentCancelPage />} />
+
+      {/* Super Admin routes */}
+      <Route
+        path="/super-admin"
+        element={
+          <ProtectedRoute allowedRoles={['admin']} requireSuperAdmin>
+            <SuperAdminLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<SADashboard />} />
+        <Route path="organizations" element={<SAOrganizationsPage />} />
+        <Route path="organizations/:id" element={<SAOrganizationDetailPage />} />
+        <Route path="users" element={<SAUsersPage />} />
+      </Route>
 
       {/* Admin routes */}
       <Route

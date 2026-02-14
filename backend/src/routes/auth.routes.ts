@@ -230,7 +230,15 @@ router.post('/change-password', authenticate, async (req: Request, res: Response
 
 // Get current user
 router.get('/me', authenticate, (req: Request, res: Response) => {
-  res.json({ user: req.user });
+  res.json({
+    user: {
+      id: req.user!.id,
+      email: req.user!.email,
+      name: req.user!.name,
+      role: req.user!.role,
+      isSuperAdmin: req.user!.isSuperAdmin,
+    },
+  });
 });
 
 // Logout

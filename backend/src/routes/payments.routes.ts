@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { z } from 'zod';
 import prisma from '../config/database.js';
+import stripe, { STRIPE_WEBHOOK_SECRET } from '../config/stripe.js';
 import { authenticate, requireDesignerOrAdmin } from '../middleware/auth.js';
 import { PaymentMilestone, PaymentStatus } from '@prisma/client';
 
@@ -12,6 +12,173 @@ const PAYMENT_MILESTONES: { milestone: PaymentMilestone; percentage: number }[] 
   { milestone: 'midpoint', percentage: 30 },
   { milestone: 'completion', percentage: 10 },
 ];
+
+// ==================== STRIPE WEBHOOK (must be before authenticate) ====================
+
+router.post('/webhook', async (req: Request, res: Response) => {
+  if (!stripe) {
+    res.status(500).json({ error: 'Stripe not configured' });
+    return;
+  }
+
+  const sig = req.headers['stripe-signature'] as string;
+
+  if (!sig || !STRIPE_WEBHOOK_SECRET) {
+    res.status(400).json({ error: 'Missing signature or webhook secret' });
+    return;
+  }
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, STRIPE_WEBHOOK_SECRET);
+  } catch (err: any) {
+    console.error('Webhook signature verification failed:', err.message);
+    res.status(400).json({ error: 'Webhook signature verification failed' });
+    return;
+  }
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object as any;
+    const stripeSessionId = session.id;
+
+    // Find the payment by stripeSessionId
+    const payment = await prisma.payment.findFirst({
+      where: { stripeSessionId },
+    });
+
+    if (payment) {
+      // Mark payment as completed
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: 'completed',
+          stripePaymentIntentId: session.payment_intent,
+          paidAt: new Date(),
+          paymentMethod: 'stripe',
+        },
+      });
+
+      // Update schedule status if applicable
+      if (payment.scheduleId) {
+        const schedule = await prisma.paymentSchedule.findUnique({
+          where: { id: payment.scheduleId },
+        });
+
+        if (schedule) {
+          const completedPayments = await prisma.payment.aggregate({
+            where: {
+              scheduleId: payment.scheduleId,
+              status: 'completed',
+            },
+            _sum: { amount: true },
+          });
+
+          const totalPaid = Number(completedPayments._sum.amount || 0);
+          const amountDue = Number(schedule.amountDue);
+
+          if (totalPaid >= amountDue) {
+            await prisma.paymentSchedule.update({
+              where: { id: payment.scheduleId },
+              data: { status: 'completed' },
+            });
+          }
+        }
+      }
+    }
+  }
+
+  res.json({ received: true });
+});
+
+// ==================== STRIPE CHECKOUT ====================
+
+router.post('/checkout/:scheduleId', authenticate, async (req: Request, res: Response) => {
+  if (!stripe) {
+    res.status(500).json({ error: 'Stripe payments are not configured' });
+    return;
+  }
+
+  const { scheduleId } = req.params;
+
+  const schedule = await prisma.paymentSchedule.findUnique({
+    where: { id: scheduleId },
+    include: {
+      project: {
+        select: { id: true, name: true, clientId: true, organizationId: true },
+      },
+    },
+  });
+
+  if (!schedule) {
+    res.status(404).json({ error: 'Payment schedule not found' });
+    return;
+  }
+
+  // Verify client access
+  if (req.user!.role === 'client' && schedule.project.clientId !== req.user!.id) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  if (schedule.status === 'completed') {
+    res.status(400).json({ error: 'This payment has already been completed' });
+    return;
+  }
+
+  const amountCents = Math.round(Number(schedule.amountDue) * 100);
+  const appUrl = process.env.APP_URL || 'http://localhost:5173';
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `${schedule.project.name} - ${schedule.milestone.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
+              description: `Payment for ${schedule.project.name}`,
+            },
+            unit_amount: amountCents,
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: `${appUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${appUrl}/payment/cancel`,
+      metadata: {
+        scheduleId: schedule.id,
+        projectId: schedule.projectId,
+      },
+    });
+
+    // Create a pending payment record linked to this session
+    await prisma.payment.create({
+      data: {
+        scheduleId: schedule.id,
+        projectId: schedule.projectId,
+        amount: schedule.amountDue,
+        paymentMethod: 'stripe',
+        stripeSessionId: session.id,
+        status: 'processing',
+      },
+    });
+
+    // Update schedule status to processing
+    await prisma.paymentSchedule.update({
+      where: { id: schedule.id },
+      data: { status: 'processing' },
+    });
+
+    res.json({ sessionUrl: session.url });
+  } catch (error: any) {
+    console.error('Stripe checkout error:', error);
+    res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+// ==================== EXISTING ROUTES ====================
 
 // Get payment schedule for a project
 router.get('/schedule/:projectId', authenticate, async (req: Request, res: Response) => {
@@ -124,7 +291,7 @@ router.post('/schedule/:projectId', authenticate, requireDesignerOrAdmin, async 
   res.status(201).json({ schedule: scheduleItems });
 });
 
-// Record a payment
+// Record a payment (manual - for admin/designer recording offline payments)
 router.post('/', authenticate, async (req: Request, res: Response) => {
   const { scheduleId, projectId, amount, paymentMethod, notes } = req.body;
 
@@ -145,16 +312,48 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
     return;
   }
 
+  // For admin/designer recording manual payments, mark as completed immediately
+  const isManualRecording = req.user!.role !== 'client';
+  const status = isManualRecording ? 'completed' : 'pending';
+
   const payment = await prisma.payment.create({
     data: {
       scheduleId,
       projectId,
       amount,
-      paymentMethod,
+      paymentMethod: paymentMethod || 'manual',
       notes,
-      status: 'pending',
+      status,
+      paidAt: isManualRecording ? new Date() : undefined,
     },
   });
+
+  // If manual payment completed, update schedule status
+  if (isManualRecording && scheduleId) {
+    const schedule = await prisma.paymentSchedule.findUnique({
+      where: { id: scheduleId },
+    });
+
+    if (schedule) {
+      const completedPayments = await prisma.payment.aggregate({
+        where: {
+          scheduleId,
+          status: 'completed',
+        },
+        _sum: { amount: true },
+      });
+
+      const totalPaid = Number(completedPayments._sum.amount || 0);
+      const amountDue = Number(schedule.amountDue);
+
+      if (totalPaid >= amountDue) {
+        await prisma.paymentSchedule.update({
+          where: { id: scheduleId },
+          data: { status: 'completed' },
+        });
+      }
+    }
+  }
 
   res.status(201).json(payment);
 });
