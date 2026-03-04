@@ -187,6 +187,14 @@ export default function LoginPage() {
                   {passwordForm.formState.errors.password && (
                     <p className="mt-1 text-sm text-red-600">{passwordForm.formState.errors.password.message}</p>
                   )}
+                  <div className="text-right">
+                    <Link
+                      to="/auth/forgot-password"
+                      className="text-sm text-designer-600 hover:text-designer-700 font-medium"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
                 </div>
 
                 <button

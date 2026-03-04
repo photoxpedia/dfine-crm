@@ -62,6 +62,18 @@ export const authApi = {
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post('/auth/change-password', { currentPassword, newPassword }),
 
+  verifyEmail: (token: string) =>
+    api.get(`/auth/verify-email?token=${token}`),
+
+  resendVerification: () =>
+    api.post('/auth/resend-verification'),
+
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }),
+
+  resetPassword: (token: string, newPassword: string) =>
+    api.post('/auth/reset-password', { token, newPassword }),
+
   getMe: () => api.get('/auth/me'),
 
   logout: () => api.post('/auth/logout'),
@@ -147,6 +159,8 @@ export const notificationsApi = {
 
 // Dashboard API
 export const dashboardApi = {
+  getStats: () => api.get('/dashboard/stats').then(res => res.data),
+
   getFollowups: () => api.get('/dashboard/followups'),
 
   getTodayFollowups: () => api.get('/dashboard/followups/today'),
@@ -550,6 +564,9 @@ export const reportsApi = {
 
   markProjectCompleted: (projectId: string) =>
     api.post(`/reports/projects/${projectId}/complete`),
+
+  getFinancialReport: () =>
+    api.get('/reports/financial'),
 };
 
 // Organization API
@@ -566,6 +583,11 @@ export const organizationApi = {
     state?: string | null;
     zip?: string | null;
   }) => api.put('/organization', data),
+
+  // Org switching
+  getMyOrgs: () => api.get('/organization/my-orgs'),
+
+  switchOrg: (orgId: string) => api.post(`/organization/switch/${orgId}`),
 
   // Members
   listMembers: () => api.get('/organization/members'),
@@ -585,11 +607,21 @@ export const organizationApi = {
   revokeInvite: (inviteId: string) =>
     api.delete(`/organization/invites/${inviteId}`),
 
+  resendInvite: (inviteId: string) =>
+    api.post(`/organization/invites/${inviteId}/resend`),
+
   verifyInvite: (token: string) =>
     api.get(`/organization/invites/verify?token=${token}`),
 
   acceptInvite: (data: { token: string; name: string; password: string }) =>
     api.post('/organization/invites/accept', data),
+
+  // Subscription billing
+  subscribe: (plan: string) =>
+    api.post('/organization/subscribe', { plan }).then(res => res.data),
+
+  billingPortal: () =>
+    api.post('/organization/billing-portal').then(res => res.data),
 };
 
 // Users API
@@ -624,6 +656,10 @@ export const superAdminApi = {
 
   impersonateUser: (id: string) =>
     api.post(`/super-admin/users/${id}/impersonate`),
+
+  // Audit Log
+  getAuditLog: (params?: { action?: string; page?: number; limit?: number }) =>
+    api.get('/super-admin/audit-log', { params }),
 };
 
 // Stripe Payments API (client-facing)

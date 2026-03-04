@@ -5,49 +5,22 @@ import {
   FolderKanban,
   DollarSign,
   TrendingUp,
-  ArrowUpRight,
-  ArrowDownRight,
   Loader2,
 } from 'lucide-react';
 import { formatCurrency, getStatusColor } from '@/lib/utils';
-import { projectsApi } from '@/lib/api';
+import { projectsApi, dashboardApi } from '@/lib/api';
 import LeadStatsWidget from './LeadStatsWidget';
 import FollowUpsWidget from './FollowUpsWidget';
 import type { Project } from '@/types';
 
-const stats = [
-  {
-    name: 'Active Projects',
-    value: '12',
-    change: '+2',
-    trend: 'up',
-    icon: FolderKanban,
-  },
-  {
-    name: 'Total Revenue',
-    value: formatCurrency(287500),
-    change: '+12%',
-    trend: 'up',
-    icon: DollarSign,
-  },
-  {
-    name: 'Pending Payments',
-    value: formatCurrency(45200),
-    change: '-8%',
-    trend: 'down',
-    icon: TrendingUp,
-  },
-  {
-    name: 'Active Designers',
-    value: '5',
-    change: '0',
-    trend: 'neutral',
-    icon: Users,
-  },
-];
-
 export default function AdminDashboard() {
   const basePath = '/admin';
+
+  // Fetch dashboard stats from API
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: dashboardApi.getStats,
+  });
 
   // Fetch recent projects
   const { data: projectsData, isLoading: projectsLoading } = useQuery({
@@ -59,6 +32,29 @@ export default function AdminDashboard() {
   });
 
   const recentProjects = (projectsData?.projects || []) as Project[];
+
+  const stats = [
+    {
+      name: 'Active Projects',
+      value: statsData ? String(statsData.activeProjects) : '--',
+      icon: FolderKanban,
+    },
+    {
+      name: 'Total Revenue',
+      value: statsData ? formatCurrency(statsData.totalRevenue) : '--',
+      icon: DollarSign,
+    },
+    {
+      name: 'Pending Payments',
+      value: statsData ? formatCurrency(statsData.pendingPayments) : '--',
+      icon: TrendingUp,
+    },
+    {
+      name: 'Active Designers',
+      value: statsData ? String(statsData.activeDesigners) : '--',
+      icon: Users,
+    },
+  ];
 
   return (
     <div className="space-y-8">
@@ -75,22 +71,13 @@ export default function AdminDashboard() {
               <div className="p-2 bg-admin-50 rounded-lg">
                 <stat.icon className="w-6 h-6 text-admin-600" />
               </div>
-              <span
-                className={`flex items-center text-sm font-medium ${
-                  stat.trend === 'up'
-                    ? 'text-green-600'
-                    : stat.trend === 'down'
-                    ? 'text-red-600'
-                    : 'text-gray-500'
-                }`}
-              >
-                {stat.change}
-                {stat.trend === 'up' && <ArrowUpRight className="w-4 h-4 ml-1" />}
-                {stat.trend === 'down' && <ArrowDownRight className="w-4 h-4 ml-1" />}
-              </span>
             </div>
             <div className="mt-4">
-              <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+              {statsLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+              ) : (
+                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+              )}
               <p className="text-sm text-gray-600">{stat.name}</p>
             </div>
           </div>

@@ -131,6 +131,7 @@ enum PaymentMilestone {
   project_start
   midpoint
   completion
+  change_order
 }
 
 enum PaymentStatus {
@@ -153,8 +154,10 @@ enum InvoiceStatus {
 
 enum NotificationType {
   lead_new
+  lead_assigned
   lead_status_change
   project_update
+  project_completed
   estimate_sent
   estimate_approved
   estimate_rejected
@@ -165,6 +168,11 @@ enum NotificationType {
   payment_overdue
   delivery_update
   project_milestone
+  change_order_submitted
+  change_order_approved
+  change_order_rejected
+  invoice_created
+  invoice_sent
 }
 
 enum TaskStatus {
@@ -306,8 +314,12 @@ model User {
   role         UserRole
   passwordHash String?  @map("password_hash")
   avatarUrl    String?  @map("avatar_url")
-  isSuperAdmin Boolean  @default(false) @map("is_super_admin")
-  isActive     Boolean  @default(true) @map("is_active")
+  isSuperAdmin           Boolean   @default(false) @map("is_super_admin")
+  isActive               Boolean   @default(true) @map("is_active")
+  isEmailVerified        Boolean   @default(false) @map("is_email_verified")
+  emailVerificationToken String?   @unique @map("email_verification_token")
+  passwordResetToken     String?   @unique @map("password_reset_token")
+  passwordResetExpiresAt DateTime? @map("password_reset_expires_at")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -570,6 +582,7 @@ model Estimate {
   approvedAt         DateTime?      @map("approved_at")
   approvalToken      String?        @unique @map("approval_token")
   approvedBy         String?        @map("approved_by")
+  signatureData      String?        @map("signature_data") // Base64 signature image
   rejectedAt         DateTime?      @map("rejected_at")
   rejectionReason    String?        @map("rejection_reason")
   createdAt          DateTime       @default(now()) @map("created_at")

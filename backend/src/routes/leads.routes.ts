@@ -354,6 +354,18 @@ router.patch('/:id/status', authenticate, requireDesignerOrAdmin, async (req: Re
     });
   }
 
+  // Notify the designer about the status change (if someone else changed it)
+  if (existing.designerId && existing.designerId !== req.user!.id) {
+    createNotification({
+      userId: existing.designerId,
+      type: 'lead_status_change',
+      title: 'Lead Status Changed',
+      message: `Lead ${lead.firstName} ${lead.lastName} status changed from ${existing.status} to ${data.status}`,
+      entityType: 'lead',
+      entityId: lead.id,
+    }).catch(err => console.error('Notification failed:', err));
+  }
+
   res.json(lead);
 });
 

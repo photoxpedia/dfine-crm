@@ -13,6 +13,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/lib/api';
+import EmailVerificationBanner from './EmailVerificationBanner';
 
 const navigation = [
   { name: 'My Project', href: '/client', icon: Home },
@@ -156,6 +157,8 @@ export default function ClientLayout() {
           </div>
         )}
       </header>
+
+      <EmailVerificationBanner />
 
       {/* Main content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

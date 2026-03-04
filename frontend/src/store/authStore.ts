@@ -9,6 +9,7 @@ export interface User {
   name: string;
   role: UserRole;
   isSuperAdmin?: boolean;
+  isEmailVerified?: boolean;
 }
 
 interface AuthState {

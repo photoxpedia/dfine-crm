@@ -3,6 +3,8 @@ import prisma from '../config/database.js';
 import stripe, { STRIPE_WEBHOOK_SECRET } from '../config/stripe.js';
 import { authenticate, requireDesignerOrAdmin } from '../middleware/auth.js';
 import { PaymentMilestone, PaymentStatus } from '@prisma/client';
+import * as invoiceService from '../services/invoice.service.js';
+import { createNotification } from '../services/notification.service.js';
 
 const router = Router();
 
@@ -12,6 +14,92 @@ const PAYMENT_MILESTONES: { milestone: PaymentMilestone; percentage: number }[] 
   { milestone: 'midpoint', percentage: 30 },
   { milestone: 'completion', percentage: 10 },
 ];
+
+// Milestone ordering for determining "next" milestone
+const MILESTONE_ORDER: PaymentMilestone[] = [
+  'contract_signing',
+  'project_start',
+  'midpoint',
+  'completion',
+];
+
+// Auto-create invoice for the next unpaid milestone after a payment is completed
+async function autoCreateNextInvoice(projectId: string, completedScheduleId: string): Promise<void> {
+  try {
+    // Find the completed schedule's milestone to determine its position
+    const completedSchedule = await prisma.paymentSchedule.findUnique({
+      where: { id: completedScheduleId },
+    });
+
+    if (!completedSchedule) return;
+
+    const completedIndex = MILESTONE_ORDER.indexOf(completedSchedule.milestone);
+    if (completedIndex < 0 || completedIndex >= MILESTONE_ORDER.length - 1) return;
+
+    // Find the next milestone in order
+    const nextMilestone = MILESTONE_ORDER[completedIndex + 1];
+
+    const nextSchedule = await prisma.paymentSchedule.findFirst({
+      where: {
+        projectId,
+        milestone: nextMilestone,
+        status: 'pending',
+      },
+    });
+
+    if (!nextSchedule) return;
+
+    // Check if an invoice already exists for this schedule
+    const existingInvoice = await prisma.invoice.findFirst({
+      where: { scheduleId: nextSchedule.id },
+    });
+
+    if (existingInvoice) return;
+
+    // Create invoice for the next milestone
+    await invoiceService.createInvoiceFromSchedule(nextSchedule.id);
+  } catch (error) {
+    console.error('Error auto-creating invoice for next milestone:', error);
+  }
+}
+
+// Check if all payment schedules for a project are completed, and if so, auto-complete the project
+async function checkAndCompleteProject(projectId: string): Promise<void> {
+  try {
+    const allSchedules = await prisma.paymentSchedule.findMany({
+      where: { projectId },
+    });
+
+    if (allSchedules.length === 0) return;
+
+    const allCompleted = allSchedules.every((s) => s.status === 'completed');
+    if (!allCompleted) return;
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, name: true, status: true, designerId: true },
+    });
+
+    if (!project || project.status === 'completed') return;
+
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { status: 'completed', completedAt: new Date() },
+    });
+
+    // Notify the project designer
+    await createNotification({
+      userId: project.designerId,
+      type: 'project_completed',
+      title: 'Project Completed',
+      message: `All payments received for ${project.name}. Project marked as completed.`,
+      entityType: 'project',
+      entityId: project.id,
+    });
+  } catch (error) {
+    console.error('Error auto-completing project:', error);
+  }
+}
 
 // ==================== STRIPE WEBHOOK (must be before authenticate) ====================
 
@@ -37,11 +125,22 @@ router.post('/webhook', async (req: Request, res: Response) => {
     return;
   }
 
+  // Helper to map Stripe price ID to plan name
+  function mapPriceToPlan(stripePriceId: string): 'starter' | 'professional' | 'enterprise' | null {
+    const { STRIPE_STARTER_PRICE_ID, STRIPE_PRO_PRICE_ID, STRIPE_ENTERPRISE_PRICE_ID } = process.env;
+    if (stripePriceId === STRIPE_STARTER_PRICE_ID) return 'starter';
+    if (stripePriceId === STRIPE_PRO_PRICE_ID) return 'professional';
+    if (stripePriceId === STRIPE_ENTERPRISE_PRICE_ID) return 'enterprise';
+    return null;
+  }
+
+  // ==================== PROJECT PAYMENT EVENTS ====================
+
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as any;
     const stripeSessionId = session.id;
 
-    // Find the payment by stripeSessionId
+    // Find the payment by stripeSessionId (for one-time project payments)
     const payment = await prisma.payment.findFirst({
       where: { stripeSessionId },
     });
@@ -81,7 +180,138 @@ router.post('/webhook', async (req: Request, res: Response) => {
               where: { id: payment.scheduleId },
               data: { status: 'completed' },
             });
+
+            // Auto-create invoice for the next unpaid milestone
+            await autoCreateNextInvoice(payment.projectId, payment.scheduleId);
+
+            // Check if all payments are completed and auto-complete the project
+            await checkAndCompleteProject(payment.projectId);
           }
+        }
+      }
+    }
+  }
+
+  // ==================== SUBSCRIPTION WEBHOOK EVENTS ====================
+
+  if (event.type === 'customer.subscription.created' || event.type === 'customer.subscription.updated') {
+    const subscription = event.data.object as any;
+    const customerId = subscription.customer as string;
+    const stripePriceId = subscription.items?.data?.[0]?.price?.id;
+    const plan = stripePriceId ? mapPriceToPlan(stripePriceId) : null;
+
+    const org = await prisma.organization.findFirst({
+      where: { stripeCustomerId: customerId },
+    });
+
+    if (org) {
+      // Map Stripe subscription status to our SubscriptionStatus enum
+      const statusMap: Record<string, 'active' | 'past_due' | 'canceled' | 'unpaid' | 'trialing'> = {
+        active: 'active',
+        past_due: 'past_due',
+        canceled: 'canceled',
+        unpaid: 'unpaid',
+        trialing: 'trialing',
+      };
+      const mappedStatus = statusMap[subscription.status] || 'active';
+
+      await prisma.organization.update({
+        where: { id: org.id },
+        data: {
+          subscriptionStatus: mappedStatus,
+          ...(plan ? { subscriptionPlan: plan } : {}),
+        },
+      });
+
+      // Upsert the Subscription record
+      const existingSub = await prisma.subscription.findFirst({
+        where: { stripeSubscriptionId: subscription.id },
+      });
+
+      const subData = {
+        stripePriceId: stripePriceId || null,
+        status: mappedStatus,
+        ...(plan ? { plan } : {}),
+        currentPeriodStart: subscription.current_period_start
+          ? new Date(subscription.current_period_start * 1000)
+          : null,
+        currentPeriodEnd: subscription.current_period_end
+          ? new Date(subscription.current_period_end * 1000)
+          : null,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
+      };
+
+      if (existingSub) {
+        await prisma.subscription.update({
+          where: { id: existingSub.id },
+          data: subData,
+        });
+      } else {
+        await prisma.subscription.create({
+          data: {
+            organizationId: org.id,
+            stripeSubscriptionId: subscription.id,
+            plan: plan || 'starter',
+            ...subData,
+          },
+        });
+      }
+    }
+  }
+
+  if (event.type === 'customer.subscription.deleted') {
+    const subscription = event.data.object as any;
+    const customerId = subscription.customer as string;
+
+    const org = await prisma.organization.findFirst({
+      where: { stripeCustomerId: customerId },
+    });
+
+    if (org) {
+      await prisma.organization.update({
+        where: { id: org.id },
+        data: { subscriptionStatus: 'canceled' },
+      });
+
+      const existingSub = await prisma.subscription.findFirst({
+        where: { stripeSubscriptionId: subscription.id },
+      });
+
+      if (existingSub) {
+        await prisma.subscription.update({
+          where: { id: existingSub.id },
+          data: {
+            status: 'canceled',
+            canceledAt: new Date(),
+          },
+        });
+      }
+    }
+  }
+
+  if (event.type === 'invoice.payment_failed') {
+    const invoice = event.data.object as any;
+    const customerId = invoice.customer as string;
+
+    const org = await prisma.organization.findFirst({
+      where: { stripeCustomerId: customerId },
+    });
+
+    if (org) {
+      await prisma.organization.update({
+        where: { id: org.id },
+        data: { subscriptionStatus: 'past_due' },
+      });
+
+      if (invoice.subscription) {
+        const existingSub = await prisma.subscription.findFirst({
+          where: { stripeSubscriptionId: invoice.subscription as string },
+        });
+        if (existingSub) {
+          await prisma.subscription.update({
+            where: { id: existingSub.id },
+            data: { status: 'past_due' },
+          });
         }
       }
     }
@@ -328,6 +558,28 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
     },
   });
 
+  // Notify the project designer about the payment
+  if (isManualRecording && project.designerId && project.designerId !== req.user!.id) {
+    createNotification({
+      userId: project.designerId,
+      type: 'payment_received',
+      title: 'Payment Received',
+      message: `A payment of $${Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} has been recorded for the project`,
+      entityType: 'project',
+      entityId: projectId,
+    }).catch(err => console.error('Notification failed:', err));
+  } else if (!isManualRecording && project.designerId) {
+    // Client made the payment, notify the designer
+    createNotification({
+      userId: project.designerId,
+      type: 'payment_received',
+      title: 'Payment Received',
+      message: `A payment of $${Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} has been submitted by the client`,
+      entityType: 'project',
+      entityId: projectId,
+    }).catch(err => console.error('Notification failed:', err));
+  }
+
   // If manual payment completed, update schedule status
   if (isManualRecording && scheduleId) {
     const schedule = await prisma.paymentSchedule.findUnique({
@@ -351,6 +603,12 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
           where: { id: scheduleId },
           data: { status: 'completed' },
         });
+
+        // Auto-create invoice for the next unpaid milestone
+        await autoCreateNextInvoice(projectId, scheduleId);
+
+        // Check if all payments are completed and auto-complete the project
+        await checkAndCompleteProject(projectId);
       }
     }
   }
@@ -405,6 +663,12 @@ router.patch('/:id', authenticate, requireDesignerOrAdmin, async (req: Request, 
           where: { id: payment.scheduleId },
           data: { status: 'completed' },
         });
+
+        // Auto-create invoice for the next unpaid milestone
+        await autoCreateNextInvoice(payment.projectId, payment.scheduleId);
+
+        // Check if all payments are completed and auto-complete the project
+        await checkAndCompleteProject(payment.projectId);
       }
     }
   }

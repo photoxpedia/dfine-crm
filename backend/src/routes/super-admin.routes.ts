@@ -187,6 +187,19 @@ router.put('/organizations/:id', async (req: Request, res: Response) => {
     data: updateData,
   });
 
+  // Audit log
+  await prisma.activityLog.create({
+    data: {
+      userId: req.user!.id,
+      action: 'update_organization',
+      entityType: 'organization',
+      entityId: id,
+      oldData: { plan: org.subscriptionPlan, status: org.subscriptionStatus, name: org.name },
+      newData: { plan: subscriptionPlan, status: subscriptionStatus, name },
+      ipAddress: req.ip || null,
+    },
+  });
+
   res.json(updated);
 });
 
@@ -289,6 +302,19 @@ router.put('/users/:id', async (req: Request, res: Response) => {
     },
   });
 
+  // Audit log
+  await prisma.activityLog.create({
+    data: {
+      userId: req.user!.id,
+      action: 'update_user',
+      entityType: 'user',
+      entityId: id,
+      oldData: { isActive: user.isActive, role: user.role },
+      newData: { isActive, role },
+      ipAddress: req.ip || null,
+    },
+  });
+
   res.json(updated);
 });
 
@@ -321,7 +347,59 @@ router.post('/users/:id/impersonate', async (req: Request, res: Response) => {
 
   const token = generateToken(authUser);
 
+  // Audit log
+  await prisma.activityLog.create({
+    data: {
+      userId: req.user!.id,
+      action: 'impersonate_user',
+      entityType: 'user',
+      entityId: id,
+      newData: { targetEmail: user.email, targetName: user.name },
+      ipAddress: req.ip || null,
+    },
+  });
+
   res.json({ token, user: authUser });
+});
+
+// ==================== AUDIT LOG ====================
+
+router.get('/audit-log', async (req: Request, res: Response) => {
+  const { action, page = '1', limit = '50' } = req.query;
+
+  const pageNum = parseInt(page as string);
+  const limitNum = parseInt(limit as string);
+  const skip = (pageNum - 1) * limitNum;
+
+  const where: any = {};
+  if (action) {
+    where.action = action as string;
+  }
+
+  const [logs, total] = await Promise.all([
+    prisma.activityLog.findMany({
+      where,
+      skip,
+      take: limitNum,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: {
+          select: { id: true, email: true, name: true },
+        },
+      },
+    }),
+    prisma.activityLog.count({ where }),
+  ]);
+
+  res.json({
+    logs,
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      pages: Math.ceil(total / limitNum),
+    },
+  });
 });
 
 export default router;

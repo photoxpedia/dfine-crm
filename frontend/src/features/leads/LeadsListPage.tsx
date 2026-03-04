@@ -13,10 +13,12 @@ import {
   CalendarClock,
   Users,
   UserPlus,
+  FileDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { leadsApi, dashboardApi, usersApi } from '@/lib/api';
 import { formatDate, formatPhone, cn, getStatusColor, getLeadStatusLabel, getBasePath } from '@/lib/utils';
+import { downloadCSV } from '@/lib/export';
 import { useIsAdmin } from '@/store/authStore';
 import { StatusChangeModal } from './components';
 import type { Lead, LeadStatus, ProjectType, SubStatus, FollowUpReason, User } from '@/types';
@@ -160,10 +162,38 @@ export default function LeadsListPage() {
             Manage your potential clients
           </p>
         </div>
-        <Link to={`${basePath}/leads/new`} className="btn btn-designer">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Lead
-        </Link>
+        <div className="flex items-center gap-2">
+          {leads.length > 0 && (
+            <button
+              onClick={() => {
+                const csvData = leads.map((lead: Lead) => ({
+                  'First Name': lead.firstName,
+                  'Last Name': lead.lastName,
+                  'Email': lead.email || '',
+                  'Phone': lead.phone || '',
+                  'Address': lead.address || '',
+                  'City': lead.city || '',
+                  'State': lead.state || '',
+                  'Zip': lead.zip || '',
+                  'Project Type': lead.projectType || '',
+                  'Status': getLeadStatusLabel(lead.status, lead.subStatus),
+                  'Source': lead.source || '',
+                  'Created': lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '',
+                }));
+                downloadCSV(csvData, `leads-export-${new Date().toISOString().split('T')[0]}`);
+                toast.success('Leads exported to CSV');
+              }}
+              className="btn btn-outline"
+            >
+              <FileDown className="w-4 h-4 mr-2" />
+              Export CSV
+            </button>
+          )}
+          <Link to={`${basePath}/leads/new`} className="btn btn-designer">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Lead
+          </Link>
+        </div>
       </div>
 
       {/* Search and Filters */}

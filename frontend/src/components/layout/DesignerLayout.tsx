@@ -11,11 +11,15 @@ import {
   X,
   ChevronDown,
   Calculator,
+  Building2,
+  RefreshCw,
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
-import { authApi } from '@/lib/api';
+import { authApi, organizationApi } from '@/lib/api';
 import NotificationBell from './NotificationBell';
+import EmailVerificationBanner from './EmailVerificationBanner';
 
 const navigation = [
   { name: 'Dashboard', href: '/designer', icon: LayoutDashboard },
@@ -29,8 +33,31 @@ const navigation = [
 export default function DesignerLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [orgMenuOpen, setOrgMenuOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
+
+  const { data: orgsData } = useQuery({
+    queryKey: ['my-orgs'],
+    queryFn: () => organizationApi.getMyOrgs().then((res) => res.data),
+  });
+
+  const organizations = orgsData?.organizations || [];
+  const currentOrg = organizations.find((o: any) => o.isDefault);
+  const hasMultipleOrgs = organizations.length > 1;
+
+  const handleSwitchOrg = async (orgId: string) => {
+    setSwitching(true);
+    try {
+      await organizationApi.switchOrg(orgId);
+      setOrgMenuOpen(false);
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to switch organization:', error);
+      setSwitching(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -117,6 +144,64 @@ export default function DesignerLayout() {
               <Menu className="w-6 h-6" />
             </button>
 
+            {hasMultipleOrgs && (
+              <div className="relative ml-2">
+                <button
+                  className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                  onClick={() => setOrgMenuOpen(!orgMenuOpen)}
+                  disabled={switching}
+                >
+                  {switching ? (
+                    <RefreshCw className="w-4 h-4 animate-spin text-gray-400" />
+                  ) : (
+                    <Building2 className="w-4 h-4 text-gray-500" />
+                  )}
+                  <span className="font-medium text-gray-700 max-w-[150px] truncate">
+                    {currentOrg?.name || 'Select Org'}
+                  </span>
+                  <ChevronDown className="w-3 h-3 text-gray-400" />
+                </button>
+
+                {orgMenuOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setOrgMenuOpen(false)}
+                    />
+                    <div className="absolute left-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                      <div className="px-3 py-2 border-b border-gray-100">
+                        <p className="text-xs font-medium text-gray-500 uppercase">Switch Organization</p>
+                      </div>
+                      {organizations.map((org: any) => (
+                        <button
+                          key={org.id}
+                          onClick={() => {
+                            if (!org.isDefault) {
+                              handleSwitchOrg(org.id);
+                            } else {
+                              setOrgMenuOpen(false);
+                            }
+                          }}
+                          className={cn(
+                            'w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between',
+                            org.isDefault && 'bg-designer-50'
+                          )}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{org.name}</span>
+                          </div>
+                          {org.isDefault && (
+                            <span className="text-xs bg-designer-100 text-designer-700 px-2 py-0.5 rounded-full flex-shrink-0">Current</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             <div className="flex-1 lg:ml-0" />
 
             <div className="flex items-center gap-4">
@@ -161,6 +246,8 @@ export default function DesignerLayout() {
             </div>
           </div>
         </header>
+
+        <EmailVerificationBanner />
 
         {/* Page content */}
         <main className="p-4 sm:p-6 lg:p-8">

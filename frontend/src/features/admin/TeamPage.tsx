@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Users, Mail, Plus, Trash2, Shield, ShieldCheck, Crown,
-  Loader2, Clock, X, UserPlus,
+  Loader2, Clock, X, UserPlus, RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { organizationApi } from '@/lib/api';
@@ -108,6 +108,17 @@ export default function TeamPage() {
     },
   });
 
+  const resendInviteMutation = useMutation({
+    mutationFn: (inviteId: string) => organizationApi.resendInvite(inviteId),
+    onSuccess: () => {
+      toast.success('Invitation resent!');
+      queryClient.invalidateQueries({ queryKey: ['organization-invites'] });
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to resend invitation');
+    },
+  });
+
   const members = membersData?.data?.members || [];
   const invites = invitesData?.data?.invites || [];
 
@@ -189,27 +200,50 @@ export default function TeamPage() {
             </h2>
           </div>
           <div className="divide-y">
-            {invites.map((invite: any) => (
-              <div key={invite.id} className="px-6 py-4 flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-gray-900">{invite.email}</p>
-                  <p className="text-sm text-gray-500">
-                    Invited by {invite.invitedBy?.name} &middot; Expires{' '}
-                    {new Date(invite.expiresAt).toLocaleDateString()}
-                  </p>
+            {invites.map((invite: any) => {
+              const isExpired = new Date(invite.expiresAt) < new Date();
+              return (
+                <div key={invite.id} className={`px-6 py-4 flex items-center justify-between ${isExpired ? 'bg-red-50' : ''}`}>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-gray-900">{invite.email}</p>
+                      {isExpired && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                          Expired
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-500">
+                      Invited by {invite.invitedBy?.name} &middot;{' '}
+                      {isExpired ? 'Expired' : 'Expires'}{' '}
+                      {new Date(invite.expiresAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {getRoleBadge(invite.role)}
+                    <button
+                      onClick={() => resendInviteMutation.mutate(invite.id)}
+                      disabled={resendInviteMutation.isPending}
+                      className="text-blue-500 hover:text-blue-700 p-1"
+                      title="Resend invitation"
+                    >
+                      {resendInviteMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => revokeInviteMutation.mutate(invite.id)}
+                      className="text-red-500 hover:text-red-700 p-1"
+                      title="Revoke invitation"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  {getRoleBadge(invite.role)}
-                  <button
-                    onClick={() => revokeInviteMutation.mutate(invite.id)}
-                    className="text-red-500 hover:text-red-700 p-1"
-                    title="Revoke invitation"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

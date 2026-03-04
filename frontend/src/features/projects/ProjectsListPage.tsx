@@ -9,9 +9,12 @@ import {
   DollarSign,
   Loader2,
   FolderKanban,
+  FileDown,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { projectsApi } from '@/lib/api';
 import { formatDate, formatCurrency, cn, getStatusColor, formatStatus, getBasePath } from '@/lib/utils';
+import { downloadCSV } from '@/lib/export';
 import type { Project, ProjectStatus, ProjectType } from '@/types';
 
 const STATUS_OPTIONS: ProjectStatus[] = [
@@ -61,10 +64,44 @@ export default function ProjectsListPage() {
             Manage your active projects
           </p>
         </div>
-        <Link to={`${basePath}/projects/new`} className="btn btn-designer">
-          <Plus className="w-4 h-4 mr-2" />
-          New Project
-        </Link>
+        <div className="flex items-center gap-2">
+          {projects.length > 0 && (
+            <button
+              onClick={() => {
+                const csvData = projects.map((project: Project) => ({
+                  'Name': project.name,
+                  'Client': project.lead
+                    ? `${project.lead.firstName} ${project.lead.lastName}`
+                    : '',
+                  'Address': project.address || '',
+                  'City': project.city || '',
+                  'State': project.state || '',
+                  'Project Type': project.projectType || '',
+                  'Status': formatStatus(project.status),
+                  'Start Date': project.startDate
+                    ? new Date(project.startDate).toLocaleDateString()
+                    : '',
+                  'End Date': project.endDate
+                    ? new Date(project.endDate).toLocaleDateString()
+                    : '',
+                  'Created': project.createdAt
+                    ? new Date(project.createdAt).toLocaleDateString()
+                    : '',
+                }));
+                downloadCSV(csvData, `projects-export-${new Date().toISOString().split('T')[0]}`);
+                toast.success('Projects exported to CSV');
+              }}
+              className="btn btn-outline"
+            >
+              <FileDown className="w-4 h-4 mr-2" />
+              Export CSV
+            </button>
+          )}
+          <Link to={`${basePath}/projects/new`} className="btn btn-designer">
+            <Plus className="w-4 h-4 mr-2" />
+            New Project
+          </Link>
+        </div>
       </div>
 
       {/* Search and Filters */}

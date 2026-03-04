@@ -253,6 +253,32 @@ router.post('/:id/assign', authenticate, requireDesignerOrAdmin, async (req: Req
     return;
   }
 
+  // Check for overlapping assignments (double-book prevention)
+  if (startDate && endDate) {
+    const overlapping = await prisma.crewAssignment.findFirst({
+      where: {
+        crewId: req.params.id,
+        AND: [
+          { startDate: { lte: new Date(endDate) } },
+          { endDate: { gte: new Date(startDate) } },
+        ],
+      },
+      include: { project: { select: { name: true } } },
+    });
+    if (overlapping) {
+      const overlapStart = overlapping.startDate
+        ? overlapping.startDate.toLocaleDateString()
+        : 'N/A';
+      const overlapEnd = overlapping.endDate
+        ? overlapping.endDate.toLocaleDateString()
+        : 'N/A';
+      res.status(409).json({
+        error: `Crew is already assigned to "${overlapping.project.name}" from ${overlapStart} to ${overlapEnd}`,
+      });
+      return;
+    }
+  }
+
   const assignment = await prisma.crewAssignment.create({
     data: {
       crewId: req.params.id,

@@ -1,8 +1,74 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../config/database.js';
-import { authenticate, requireDesignerOrAdmin } from '../middleware/auth.js';
+import { authenticate, requireDesignerOrAdmin, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
+
+// Get dashboard stats (admin only)
+router.get('/stats', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const membership = await prisma.organizationMember.findFirst({
+      where: { userId: req.user!.id, isDefault: true },
+    });
+
+    if (!membership) {
+      res.status(400).json({ error: 'User must belong to an organization' });
+      return;
+    }
+
+    const organizationId = membership.organizationId;
+
+    // Run all queries in parallel for performance
+    const [activeProjects, totalRevenueResult, pendingPaymentsResult, activeDesigners] = await Promise.all([
+      // Count active projects (approved or in_progress)
+      prisma.project.count({
+        where: {
+          organizationId,
+          status: { in: ['approved', 'in_progress'] },
+        },
+      }),
+
+      // Sum of completed payments for projects in this org
+      prisma.payment.aggregate({
+        where: {
+          status: 'completed',
+          project: { organizationId },
+        },
+        _sum: { amount: true },
+      }),
+
+      // Sum of pending/invoiced payment schedules for projects in this org
+      prisma.paymentSchedule.aggregate({
+        where: {
+          status: { in: ['pending', 'invoiced'] },
+          project: { organizationId },
+        },
+        _sum: { amountDue: true },
+      }),
+
+      // Count active designers in the org
+      prisma.organizationMember.count({
+        where: {
+          organizationId,
+          user: {
+            role: 'designer',
+            isActive: true,
+          },
+        },
+      }),
+    ]);
+
+    res.json({
+      activeProjects,
+      totalRevenue: Number(totalRevenueResult._sum.amount || 0),
+      pendingPayments: Number(pendingPaymentsResult._sum.amountDue || 0),
+      activeDesigners,
+    });
+  } catch (error) {
+    console.error('Dashboard stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch dashboard stats' });
+  }
+});
 
 // Get upcoming follow-ups (next 7 days)
 router.get('/followups', authenticate, requireDesignerOrAdmin, async (req: Request, res: Response) => {

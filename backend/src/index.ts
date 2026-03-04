@@ -33,6 +33,8 @@ const PORT = process.env.PORT || 3000;
 app.use(cors({
   origin: process.env.APP_URL || 'http://localhost:5173',
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 // Raw body for Stripe webhook (must be before express.json())
@@ -70,6 +72,20 @@ app.use('/api/organization', organizationRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/super-admin', superAdminRoutes);
+
+// In production, serve frontend static files
+if (process.env.NODE_ENV === 'production') {
+  const frontendPath = path.join(__dirname, '../../frontend/dist');
+  app.use(express.static(frontendPath));
+
+  // SPA catch-all: any non-API route serves index.html
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendPath, 'index.html'));
+  });
+}
 
 // Error handling
 app.use(notFoundHandler);

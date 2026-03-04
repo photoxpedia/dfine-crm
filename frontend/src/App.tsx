@@ -15,6 +15,9 @@ import SignupPage from '@/features/auth/SignupPage';
 import AcceptInvitePage from '@/features/auth/AcceptInvitePage';
 import VerifyPage from '@/features/auth/VerifyPage';
 import ClientInvitePage from '@/features/auth/ClientInvitePage';
+import VerifyEmailPage from '@/features/auth/VerifyEmailPage';
+import ForgotPasswordPage from '@/features/auth/ForgotPasswordPage';
+import ResetPasswordPage from '@/features/auth/ResetPasswordPage';
 
 // Dashboard pages
 import AdminDashboard from '@/features/dashboard/AdminDashboard';
@@ -45,6 +48,7 @@ import SettingsPage from '@/features/admin/SettingsPage';
 import ContractTemplatesPage from '@/features/admin/ContractTemplatesPage';
 import LeadSourcesPage from '@/features/admin/LeadSourcesPage';
 import TeamPage from '@/features/admin/TeamPage';
+import FinancialReportsPage from '@/features/admin/FinancialReportsPage';
 
 // Document pages
 import DocumentsPage from '@/features/documents/DocumentsPage';
@@ -146,6 +150,9 @@ export default function App() {
       <Route path="/invite/accept" element={<AcceptInvitePage />} />
       <Route path="/auth/verify" element={<VerifyPage />} />
       <Route path="/client/invite" element={<ClientInvitePage />} />
+      <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
       <Route path="/estimate/approve/:token" element={<EstimateApprovalPage />} />
 
       {/* Payment result pages (public - user redirected back from Stripe) */}
@@ -196,6 +203,7 @@ export default function App() {
         <Route path="contracts" element={<ContractTemplatesPage />} />
         <Route path="lead-sources" element={<LeadSourcesPage />} />
         <Route path="team" element={<TeamPage />} />
+        <Route path="reports/financial" element={<FinancialReportsPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 

@@ -284,12 +284,13 @@ export async function verifyClientInvite(token: string): Promise<VerifyResult> {
   });
 
   if (!user) {
-    // Create new client user
+    // Create new client user (invited clients are considered email-verified)
     user = await prisma.user.create({
       data: {
         email: invite.email,
         name: invite.email.split('@')[0], // Default name from email
         role: 'client' as UserRole,
+        isEmailVerified: true,
       },
     });
   }
@@ -401,6 +402,57 @@ export async function registerUser(data: {
     return user;
   });
 
+  // Generate email verification token
+  const emailVerificationToken = uuidv4();
+  await prisma.user.update({
+    where: { id: result.id },
+    data: {
+      isEmailVerified: false,
+      emailVerificationToken,
+    },
+  });
+
+  // Send verification email
+  const verifyUrl = `${process.env.APP_URL || 'http://localhost:5174'}/auth/verify-email?token=${emailVerificationToken}`;
+  await sendEmail({
+    to: result.email,
+    subject: 'Verify Your Email - D\'Fine Kitchen & Bath Remodeling',
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .button {
+              display: inline-block;
+              padding: 12px 24px;
+              background-color: #8B5CF6;
+              color: white;
+              text-decoration: none;
+              border-radius: 6px;
+              margin: 20px 0;
+            }
+            .footer { margin-top: 30px; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h2>Verify Your Email Address</h2>
+            <p>Thank you for registering! Please click the button below to verify your email address:</p>
+            <a href="${verifyUrl}" class="button">Verify Email</a>
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="word-break: break-all;">${verifyUrl}</p>
+            <div class="footer">
+              <p>If you didn't create an account, you can safely ignore this email.</p>
+              <p>&copy; ${new Date().getFullYear()} D'Fine Kitchen & Bath Remodeling</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+  });
+
   const authUser: AuthUser = {
     id: result.id,
     email: result.email,
@@ -483,6 +535,201 @@ export async function setPassword(userId: string, password: string): Promise<{ s
   });
 
   return { success: true, message: 'Password set successfully.' };
+}
+
+// ==================== EMAIL VERIFICATION ====================
+
+export async function verifyEmail(token: string): Promise<{ success: boolean; message: string }> {
+  const user = await prisma.user.findFirst({
+    where: { emailVerificationToken: token },
+  });
+
+  if (!user) {
+    return { success: false, message: 'Invalid verification token.' };
+  }
+
+  if (user.isEmailVerified) {
+    return { success: true, message: 'Email is already verified.' };
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      isEmailVerified: true,
+      emailVerificationToken: null,
+    },
+  });
+
+  return { success: true, message: 'Email verified successfully!' };
+}
+
+export async function resendVerificationEmail(userId: string): Promise<{ success: boolean; message: string }> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, isEmailVerified: true },
+  });
+
+  if (!user) {
+    return { success: false, message: 'User not found.' };
+  }
+
+  if (user.isEmailVerified) {
+    return { success: false, message: 'Email is already verified.' };
+  }
+
+  const emailVerificationToken = uuidv4();
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { emailVerificationToken },
+  });
+
+  const verifyUrl = `${process.env.APP_URL || 'http://localhost:5174'}/auth/verify-email?token=${emailVerificationToken}`;
+  const emailSent = await sendEmail({
+    to: user.email,
+    subject: 'Verify Your Email - D\'Fine Kitchen & Bath Remodeling',
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .button {
+              display: inline-block;
+              padding: 12px 24px;
+              background-color: #8B5CF6;
+              color: white;
+              text-decoration: none;
+              border-radius: 6px;
+              margin: 20px 0;
+            }
+            .footer { margin-top: 30px; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h2>Verify Your Email Address</h2>
+            <p>Please click the button below to verify your email address:</p>
+            <a href="${verifyUrl}" class="button">Verify Email</a>
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="word-break: break-all;">${verifyUrl}</p>
+            <div class="footer">
+              <p>If you didn't request this, you can safely ignore this email.</p>
+              <p>&copy; ${new Date().getFullYear()} D'Fine Kitchen & Bath Remodeling</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+  });
+
+  if (!emailSent) {
+    return { success: false, message: 'Failed to send verification email. Please try again.' };
+  }
+
+  return { success: true, message: 'Verification email sent! Check your inbox.' };
+}
+
+// ==================== PASSWORD RESET ====================
+
+export async function forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
+  const normalizedEmail = email.toLowerCase().trim();
+
+  const user = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+    select: { id: true, email: true, isActive: true },
+  });
+
+  // Always return success to not reveal if user exists
+  if (!user || !user.isActive) {
+    return { success: true, message: 'If this email is registered, you will receive a password reset link.' };
+  }
+
+  const resetToken = uuidv4();
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordResetToken: resetToken,
+      passwordResetExpiresAt: expiresAt,
+    },
+  });
+
+  const resetUrl = `${process.env.APP_URL || 'http://localhost:5174'}/auth/reset-password?token=${resetToken}`;
+  await sendEmail({
+    to: user.email,
+    subject: 'Reset Your Password - D\'Fine Kitchen & Bath Remodeling',
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .button {
+              display: inline-block;
+              padding: 12px 24px;
+              background-color: #8B5CF6;
+              color: white;
+              text-decoration: none;
+              border-radius: 6px;
+              margin: 20px 0;
+            }
+            .footer { margin-top: 30px; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h2>Reset Your Password</h2>
+            <p>We received a request to reset your password. Click the button below to set a new password:</p>
+            <a href="${resetUrl}" class="button">Reset Password</a>
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="word-break: break-all;">${resetUrl}</p>
+            <p><strong>This link will expire in 1 hour.</strong></p>
+            <div class="footer">
+              <p>If you didn't request a password reset, you can safely ignore this email.</p>
+              <p>&copy; ${new Date().getFullYear()} D'Fine Kitchen & Bath Remodeling</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+  });
+
+  return { success: true, message: 'If this email is registered, you will receive a password reset link.' };
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+  if (newPassword.length < 8) {
+    return { success: false, message: 'Password must be at least 8 characters.' };
+  }
+
+  const user = await prisma.user.findFirst({
+    where: { passwordResetToken: token },
+    select: { id: true, passwordResetExpiresAt: true },
+  });
+
+  if (!user) {
+    return { success: false, message: 'Invalid or expired reset token.' };
+  }
+
+  if (!user.passwordResetExpiresAt || new Date() > user.passwordResetExpiresAt) {
+    return { success: false, message: 'This reset link has expired. Please request a new one.' };
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash,
+      passwordResetToken: null,
+      passwordResetExpiresAt: null,
+    },
+  });
+
+  return { success: true, message: 'Password has been reset successfully. You can now log in.' };
 }
 
 export async function changePassword(

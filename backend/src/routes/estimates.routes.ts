@@ -5,8 +5,10 @@ import prisma from '../config/database.js';
 import { authenticate, requireDesignerOrAdmin, requireAdmin } from '../middleware/auth.js';
 import * as estimatesService from '../services/estimates.service.js';
 import * as paymentService from '../services/payment.service.js';
+import * as invoiceService from '../services/invoice.service.js';
 import { sendEmail } from '../config/email.js';
 import { EstimateStatus, UnitOfMeasure, ProjectType } from '@prisma/client';
+import { createNotification } from '../services/notification.service.js';
 
 const router = Router();
 
@@ -591,6 +593,23 @@ router.post('/:id/finalize', authenticate, requireDesignerOrAdmin, async (req: R
   const total = parseFloat(estimate.total.toString());
   await paymentService.createPaymentSchedule(estimate.project.id, total);
 
+  // Auto-create invoice for the first milestone (contract_signing)
+  try {
+    const firstMilestone = await prisma.paymentSchedule.findFirst({
+      where: {
+        projectId: estimate.project.id,
+        milestone: 'contract_signing',
+      },
+    });
+
+    if (firstMilestone) {
+      await invoiceService.createInvoiceFromSchedule(firstMilestone.id);
+    }
+  } catch (invoiceError) {
+    // Log error but don't fail the finalization
+    console.error('Error auto-creating invoice for first milestone:', invoiceError);
+  }
+
   // Send email to client (use lead email as fallback)
   const recipientEmail = updatedEstimate.project.client?.email || updatedEstimate.project.lead?.email;
   if (shouldSendEmail && recipientEmail) {
@@ -644,6 +663,18 @@ router.post('/:id/finalize', authenticate, requireDesignerOrAdmin, async (req: R
         </div>
       `,
     });
+  }
+
+  // Notify the designer that the estimate was sent
+  if (estimate.project.designerId && estimate.project.designerId !== req.user!.id) {
+    createNotification({
+      userId: estimate.project.designerId,
+      type: 'estimate_sent',
+      title: 'Estimate Sent',
+      message: `Estimate for ${estimate.project.name} has been sent to the client`,
+      entityType: 'estimate',
+      entityId: estimate.id,
+    }).catch(err => console.error('Notification failed:', err));
   }
 
   res.json({
@@ -736,13 +767,14 @@ router.post('/approval/:token/approve', async (req: Request, res: Response) => {
     return;
   }
 
-  // Update estimate status
+  // Update estimate status (including signature data if provided)
   const updated = await prisma.estimate.update({
     where: { id: estimate.id },
     data: {
       status: 'approved',
       approvedAt: new Date(),
       approvedBy: approvedBy || estimate.project.client?.name || 'Client',
+      signatureData: signature || null,
     },
   });
 
@@ -751,6 +783,39 @@ router.post('/approval/:token/approve', async (req: Request, res: Response) => {
     where: { id: estimate.projectId },
     data: { status: 'approved' },
   });
+
+  // Create a contract Document record linked to the estimate
+  try {
+    const creatorId = estimate.project.client?.id || estimate.project.designerId;
+
+    const document = await prisma.document.create({
+      data: {
+        projectId: estimate.projectId,
+        estimateId: estimate.id,
+        createdById: creatorId,
+        type: 'contract',
+        name: `Contract - ${estimate.project.name || 'Estimate'} (Approved)`,
+        status: 'signed',
+      },
+    });
+
+    // Create a Signature record if we have signature data AND a client user
+    if (signature && estimate.project.client?.id) {
+      await prisma.signature.create({
+        data: {
+          documentId: document.id,
+          userId: estimate.project.client.id,
+          signatureData: signature,
+          ipAddress: req.ip || req.headers['x-forwarded-for'] as string || null,
+          userAgent: req.headers['user-agent'] || null,
+          signedAt: new Date(),
+        },
+      });
+    }
+  } catch (docError) {
+    // Log error but don't fail the approval
+    console.error('Error creating contract document/signature:', docError);
+  }
 
   // Auto-generate materials from estimate line items
   try {
@@ -862,6 +927,18 @@ router.post('/approval/:token/approve', async (req: Request, res: Response) => {
     });
   }
 
+  // Create in-app notification for the designer
+  if (estimate.project.designerId) {
+    createNotification({
+      userId: estimate.project.designerId,
+      type: 'estimate_approved',
+      title: 'Estimate Approved',
+      message: `${estimate.project.client?.name || 'The client'} approved the estimate for ${estimate.project.name}`,
+      entityType: 'estimate',
+      entityId: estimate.id,
+    }).catch(err => console.error('Notification failed:', err));
+  }
+
   res.json({
     message: 'Estimate approved successfully',
     estimate: updated,
@@ -928,6 +1005,18 @@ router.post('/approval/:token/reject', async (req: Request, res: Response) => {
         </div>
       `,
     });
+  }
+
+  // Create in-app notification for the designer
+  if (estimate.project.designerId) {
+    createNotification({
+      userId: estimate.project.designerId,
+      type: 'estimate_rejected',
+      title: 'Estimate Needs Revision',
+      message: `${estimate.project.client?.name || 'The client'} requested changes to the estimate for ${estimate.project.name}${reason ? `: ${reason}` : ''}`,
+      entityType: 'estimate',
+      entityId: estimate.id,
+    }).catch(err => console.error('Notification failed:', err));
   }
 
   res.json({

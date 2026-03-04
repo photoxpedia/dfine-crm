@@ -5,6 +5,8 @@ import prisma from '../config/database.js';
 import { authenticate, requireDesignerOrAdmin } from '../middleware/auth.js';
 import { TaskStatus, TaskPriority, ChangeOrderStatus, Prisma } from '@prisma/client';
 import { uploadProjectPhotos, getRelativePath, getFullPath } from '../config/upload.js';
+import * as invoiceService from '../services/invoice.service.js';
+import { createNotification } from '../services/notification.service.js';
 
 const router = Router();
 
@@ -571,6 +573,61 @@ router.patch('/:projectId/change-orders/:coId/status', authenticate, requireDesi
       createdBy: { select: { id: true, name: true } },
     },
   });
+
+  // When a change order is approved with a cost impact, create a payment schedule entry and invoice
+  if (status === 'approved' && Number(updated.costImpact) > 0) {
+    try {
+      const newSchedule = await prisma.paymentSchedule.create({
+        data: {
+          projectId,
+          milestone: 'change_order',
+          percentage: 100,
+          amountDue: Number(updated.costImpact),
+          status: 'pending',
+        },
+      });
+
+      // Auto-create an invoice for the new change order payment schedule
+      await invoiceService.createInvoiceFromSchedule(newSchedule.id);
+    } catch (error) {
+      console.error('Error creating payment schedule for change order:', error);
+    }
+  }
+
+  // Notify relevant users about change order status changes
+  const notificationType = status === 'pending_approval'
+    ? 'change_order_submitted'
+    : status === 'approved'
+    ? 'change_order_approved'
+    : status === 'rejected'
+    ? 'change_order_rejected'
+    : null;
+
+  if (notificationType) {
+    const statusLabel = status === 'pending_approval' ? 'submitted for approval' : status;
+    // Notify the designer if someone else changed the status
+    if (changeOrder.project.designerId && changeOrder.project.designerId !== req.user!.id) {
+      createNotification({
+        userId: changeOrder.project.designerId,
+        type: notificationType as any,
+        title: `Change Order ${statusLabel.charAt(0).toUpperCase() + statusLabel.slice(1)}`,
+        message: `Change order "${updated.title}" has been ${statusLabel}`,
+        entityType: 'project',
+        entityId: projectId,
+      }).catch(err => console.error('Notification failed:', err));
+    }
+    // Notify the change order creator if someone else changed the status
+    if (updated.createdBy.id !== req.user!.id && updated.createdBy.id !== changeOrder.project.designerId) {
+      createNotification({
+        userId: updated.createdBy.id,
+        type: notificationType as any,
+        title: `Change Order ${statusLabel.charAt(0).toUpperCase() + statusLabel.slice(1)}`,
+        message: `Change order "${updated.title}" has been ${statusLabel}`,
+        entityType: 'project',
+        entityId: projectId,
+      }).catch(err => console.error('Notification failed:', err));
+    }
+  }
 
   res.json(updated);
 });

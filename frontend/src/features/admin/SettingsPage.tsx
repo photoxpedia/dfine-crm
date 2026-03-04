@@ -376,6 +376,30 @@ function BillingSettings() {
 
   const org = data?.data;
 
+  const subscribeMutation = useMutation({
+    mutationFn: (plan: string) => organizationApi.subscribe(plan),
+    onSuccess: (data) => {
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to start checkout');
+    },
+  });
+
+  const portalMutation = useMutation({
+    mutationFn: () => organizationApi.billingPortal(),
+    onSuccess: (data) => {
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to open billing portal');
+    },
+  });
+
   if (isLoading) {
     return (
       <div className="card p-6 text-center">
@@ -428,6 +452,8 @@ function BillingSettings() {
     },
   ];
 
+  const hasStripeCustomer = !!org?.stripeCustomerId;
+
   return (
     <div className="space-y-6">
       {/* Current Plan */}
@@ -451,6 +477,16 @@ function BillingSettings() {
               </p>
             )}
           </div>
+          {hasStripeCustomer && (
+            <button
+              onClick={() => portalMutation.mutate()}
+              disabled={portalMutation.isPending}
+              className="btn btn-secondary"
+            >
+              {portalMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Manage Billing
+            </button>
+          )}
         </div>
 
         {org?._count && (
@@ -477,6 +513,7 @@ function BillingSettings() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {plans.map((plan) => {
             const isCurrent = org?.subscriptionPlan === plan.id;
+            const isSubscribing = subscribeMutation.isPending;
             return (
               <div
                 key={plan.id}
@@ -498,23 +535,29 @@ function BillingSettings() {
                   ))}
                 </ul>
                 <button
+                  onClick={() => !isCurrent && subscribeMutation.mutate(plan.id)}
                   className={`mt-6 w-full py-2 rounded-lg text-sm font-medium transition-colors ${
                     isCurrent
                       ? 'bg-designer-100 text-designer-700 cursor-default'
                       : 'bg-designer-600 text-white hover:bg-designer-700'
                   }`}
-                  disabled={isCurrent}
+                  disabled={isCurrent || isSubscribing}
                 >
-                  {isCurrent ? 'Current Plan' : 'Upgrade'}
+                  {isSubscribing && !isCurrent ? (
+                    <span className="flex items-center justify-center">
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Redirecting...
+                    </span>
+                  ) : isCurrent ? (
+                    'Current Plan'
+                  ) : (
+                    'Upgrade'
+                  )}
                 </button>
               </div>
             );
           })}
         </div>
-
-        <p className="text-sm text-gray-500 mt-4">
-          Stripe billing integration coming soon. Contact support for plan changes.
-        </p>
       </div>
     </div>
   );

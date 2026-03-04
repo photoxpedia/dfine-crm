@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import * as authService from '../services/auth.service.js';
 import { authenticate, requireDesignerOrAdmin } from '../middleware/auth.js';
+import prisma from '../config/database.js';
 
 const router = Router();
 
@@ -21,6 +22,15 @@ const setPasswordSchema = z.object({
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),
   newPassword: z.string().min(8, 'New password must be at least 8 characters'),
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email('Invalid email address'),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'Token is required'),
+  newPassword: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
 const registerSchema = z.object({
@@ -228,8 +238,88 @@ router.post('/change-password', authenticate, async (req: Request, res: Response
   }
 });
 
+// Verify email
+router.get('/verify-email', async (req: Request, res: Response) => {
+  try {
+    const token = req.query.token as string;
+
+    if (!token) {
+      res.status(400).json({ error: 'Token is required' });
+      return;
+    }
+
+    const result = await authService.verifyEmail(token);
+
+    if (result.success) {
+      res.json({ message: result.message });
+    } else {
+      res.status(400).json({ error: result.message });
+    }
+  } catch (error) {
+    throw error;
+  }
+});
+
+// Resend verification email (authenticated)
+router.post('/resend-verification', authenticate, async (req: Request, res: Response) => {
+  try {
+    const result = await authService.resendVerificationEmail(req.user!.id);
+
+    if (result.success) {
+      res.json({ message: result.message });
+    } else {
+      res.status(400).json({ error: result.message });
+    }
+  } catch (error) {
+    throw error;
+  }
+});
+
+// Forgot password
+router.post('/forgot-password', async (req: Request, res: Response) => {
+  try {
+    const { email } = forgotPasswordSchema.parse(req.body);
+    const result = await authService.forgotPassword(email);
+
+    // Always return 200 to not reveal if user exists
+    res.json({ message: result.message });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: error.errors[0].message });
+    } else {
+      throw error;
+    }
+  }
+});
+
+// Reset password
+router.post('/reset-password', async (req: Request, res: Response) => {
+  try {
+    const { token, newPassword } = resetPasswordSchema.parse(req.body);
+    const result = await authService.resetPassword(token, newPassword);
+
+    if (result.success) {
+      res.json({ message: result.message });
+    } else {
+      res.status(400).json({ error: result.message });
+    }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: error.errors[0].message });
+    } else {
+      throw error;
+    }
+  }
+});
+
 // Get current user
-router.get('/me', authenticate, (req: Request, res: Response) => {
+router.get('/me', authenticate, async (req: Request, res: Response) => {
+  // Fetch isEmailVerified from database
+  const fullUser = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    select: { isEmailVerified: true },
+  });
+
   res.json({
     user: {
       id: req.user!.id,
@@ -237,6 +327,7 @@ router.get('/me', authenticate, (req: Request, res: Response) => {
       name: req.user!.name,
       role: req.user!.role,
       isSuperAdmin: req.user!.isSuperAdmin,
+      isEmailVerified: fullUser?.isEmailVerified ?? false,
     },
   });
 });
