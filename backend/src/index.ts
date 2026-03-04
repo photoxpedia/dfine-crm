@@ -91,12 +91,13 @@ if (process.env.NODE_ENV === 'production') {
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-app.listen(PORT, () => {
+const HOST = '0.0.0.0';
+app.listen(Number(PORT), HOST, () => {
   console.log(`
   ╔═══════════════════════════════════════════════════╗
   ║                                                   ║
   ║   D'Fine Kitchen & Bath Remodeling CRM API        ║
-  ║   Running on http://localhost:${PORT}               ║
+  ║   Running on http://${HOST}:${PORT}                  ║
   ║                                                   ║
   ╚═══════════════════════════════════════════════════╝
   `);
