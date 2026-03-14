@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import prisma from '../config/database.js';
-import { sendEmail } from '../config/email.js';
+import { sendEmail, EMAIL_CONFIGURED } from '../config/email.js';
 import { generateToken, AuthUser } from '../middleware/auth.js';
 import { UserRole } from '@prisma/client';
 
@@ -402,56 +402,63 @@ export async function registerUser(data: {
     return user;
   });
 
-  // Generate email verification token
-  const emailVerificationToken = uuidv4();
-  await prisma.user.update({
-    where: { id: result.id },
-    data: {
-      isEmailVerified: false,
-      emailVerificationToken,
-    },
-  });
+  // Email verification: skip if email service not configured
+  if (EMAIL_CONFIGURED) {
+    const emailVerificationToken = uuidv4();
+    await prisma.user.update({
+      where: { id: result.id },
+      data: {
+        isEmailVerified: false,
+        emailVerificationToken,
+      },
+    });
 
-  // Send verification email
-  const verifyUrl = `${process.env.APP_URL || 'http://localhost:5174'}/auth/verify-email?token=${emailVerificationToken}`;
-  await sendEmail({
-    to: result.email,
-    subject: 'Verify Your Email - D\'Fine Kitchen & Bath Remodeling',
-    html: `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .button {
-              display: inline-block;
-              padding: 12px 24px;
-              background-color: #8B5CF6;
-              color: white;
-              text-decoration: none;
-              border-radius: 6px;
-              margin: 20px 0;
-            }
-            .footer { margin-top: 30px; color: #666; font-size: 12px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h2>Verify Your Email Address</h2>
-            <p>Thank you for registering! Please click the button below to verify your email address:</p>
-            <a href="${verifyUrl}" class="button">Verify Email</a>
-            <p>Or copy and paste this link into your browser:</p>
-            <p style="word-break: break-all;">${verifyUrl}</p>
-            <div class="footer">
-              <p>If you didn't create an account, you can safely ignore this email.</p>
-              <p>&copy; ${new Date().getFullYear()} D'Fine Kitchen & Bath Remodeling</p>
+    const verifyUrl = `${process.env.APP_URL || 'http://localhost:5174'}/auth/verify-email?token=${emailVerificationToken}`;
+    sendEmail({
+      to: result.email,
+      subject: 'Verify Your Email - D\'Fine Kitchen & Bath Remodeling',
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .button {
+                display: inline-block;
+                padding: 12px 24px;
+                background-color: #8B5CF6;
+                color: white;
+                text-decoration: none;
+                border-radius: 6px;
+                margin: 20px 0;
+              }
+              .footer { margin-top: 30px; color: #666; font-size: 12px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h2>Verify Your Email Address</h2>
+              <p>Thank you for registering! Please click the button below to verify your email address:</p>
+              <a href="${verifyUrl}" class="button">Verify Email</a>
+              <p>Or copy and paste this link into your browser:</p>
+              <p style="word-break: break-all;">${verifyUrl}</p>
+              <div class="footer">
+                <p>If you didn't create an account, you can safely ignore this email.</p>
+                <p>&copy; ${new Date().getFullYear()} D'Fine Kitchen & Bath Remodeling</p>
+              </div>
             </div>
-          </div>
-        </body>
-      </html>
-    `,
-  });
+          </body>
+        </html>
+      `,
+    });
+  } else {
+    // Auto-verify when email not configured
+    await prisma.user.update({
+      where: { id: result.id },
+      data: { isEmailVerified: true },
+    });
+  }
 
   const authUser: AuthUser = {
     id: result.id,

@@ -1,5 +1,5 @@
 import { PrismaClient, ProjectType, UnitOfMeasure, LeadStatus } from '@prisma/client';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 const SALT_ROUNDS = 10;
@@ -230,6 +230,7 @@ async function main() {
       name: 'Admin User',
       role: 'admin',
       passwordHash,
+      isSuperAdmin: true,
     },
   });
   console.log('Created admin user:', admin.email);

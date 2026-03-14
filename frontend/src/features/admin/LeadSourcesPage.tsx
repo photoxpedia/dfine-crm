@@ -59,7 +59,7 @@ export default function LeadSourcesPage() {
     onError: () => toast.error('Failed to delete lead source'),
   });
 
-  const sources = (data?.sources || []) as LeadSource[];
+  const sources = (Array.isArray(data) ? data : data?.sources || []) as LeadSource[];
 
   const handleEdit = (source: LeadSource) => {
     setEditingSource(source);

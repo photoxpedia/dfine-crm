@@ -1,14 +1,23 @@
 import nodemailer from 'nodemailer';
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.sendgrid.net',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER || 'apikey',
-    pass: process.env.SENDGRID_API_KEY,
-  },
-});
+const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+const EMAIL_CONFIGURED = !!(SENDGRID_API_KEY && SENDGRID_API_KEY !== 'your-sendgrid-api-key');
+
+const transporter = EMAIL_CONFIGURED
+  ? nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.sendgrid.net',
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: false,
+      auth: {
+        user: process.env.SMTP_USER || 'apikey',
+        pass: SENDGRID_API_KEY,
+      },
+    })
+  : null;
+
+if (!EMAIL_CONFIGURED) {
+  console.warn('WARNING: Email not configured (SENDGRID_API_KEY not set). Emails will be skipped.');
+}
 
 export interface EmailOptions {
   to: string;
@@ -18,6 +27,11 @@ export interface EmailOptions {
 }
 
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
+  if (!transporter || !EMAIL_CONFIGURED) {
+    console.log(`[Email Skipped] To: ${options.to}, Subject: ${options.subject}`);
+    return false;
+  }
+
   try {
     await transporter.sendMail({
       from: `"${process.env.EMAIL_FROM_NAME || "D'Fine Kitchen & Bath Remodeling"}" <${process.env.EMAIL_FROM || 'noreply@dfinekb.com'}>`,
@@ -33,4 +47,5 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
   }
 }
 
+export { EMAIL_CONFIGURED };
 export default transporter;

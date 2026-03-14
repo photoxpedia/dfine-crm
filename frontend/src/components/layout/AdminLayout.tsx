@@ -29,14 +29,17 @@ import EmailVerificationBanner from './EmailVerificationBanner';
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-  { name: 'Users', href: '/admin/users', icon: Users },
+  { name: 'Leads', href: '/admin/leads', icon: UserPlus },
   { name: 'Projects', href: '/admin/projects', icon: FolderKanban },
+  { name: 'Estimates', href: '/admin/estimates', icon: FileText },
+  { name: 'Documents', href: '/admin/documents', icon: FileText },
   { name: 'Pricing', href: '/admin/pricing', icon: DollarSign },
   { name: 'Purchasing', href: '/admin/purchasing', icon: ShoppingCart },
   { name: 'Vendors', href: '/admin/vendors', icon: Building2 },
   { name: 'Crews', href: '/admin/crews', icon: HardHat },
   { name: 'Contracts', href: '/admin/contracts', icon: FileText },
   { name: 'Lead Sources', href: '/admin/lead-sources', icon: Tag },
+  { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Team', href: '/admin/team', icon: UserPlus },
   { name: 'Financial Reports', href: '/admin/reports/financial', icon: BarChart3 },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
