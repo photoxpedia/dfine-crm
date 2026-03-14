@@ -7,7 +7,7 @@ import { requireActiveSubscription, requirePlanLimit } from '../middleware/subsc
 import { sendEmail } from '../config/email.js';
 import { generateToken, AuthUser } from '../middleware/auth.js';
 import { UserRole } from '@prisma/client';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import stripe from '../config/stripe.js';
 
 const router = Router();
