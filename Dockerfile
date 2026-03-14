@@ -8,6 +8,7 @@ RUN npm run build
 
 # ---- Stage 2: Build Backend ----
 FROM node:20-alpine AS backend-build
+RUN apk add --no-cache openssl
 WORKDIR /app/backend
 COPY backend/package.json backend/package-lock.json ./
 RUN npm ci
@@ -18,6 +19,9 @@ RUN npm run build
 # ---- Stage 3: Production ----
 FROM node:20-alpine AS production
 WORKDIR /app
+
+# Install OpenSSL (required by Prisma engine)
+RUN apk add --no-cache openssl
 
 # Install only production deps for backend
 COPY backend/package.json backend/package-lock.json ./backend/
