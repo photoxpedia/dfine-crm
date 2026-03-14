@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import path from 'path';
+import fs from 'fs';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 // Route imports
@@ -73,9 +74,10 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/super-admin', superAdminRoutes);
 
-// In production, serve frontend static files
-if (process.env.NODE_ENV === 'production') {
-  const frontendPath = path.join(__dirname, '../../frontend/dist');
+// Serve frontend static files if the dist directory exists
+const frontendPath = path.join(__dirname, '../../frontend/dist');
+if (fs.existsSync(frontendPath)) {
+  console.log(`Serving frontend from: ${frontendPath}`);
   app.use(express.static(frontendPath));
 
   // SPA catch-all: any non-API route serves index.html
@@ -85,6 +87,8 @@ if (process.env.NODE_ENV === 'production') {
     }
     res.sendFile(path.join(frontendPath, 'index.html'));
   });
+} else {
+  console.log(`Frontend dist not found at: ${frontendPath}`);
 }
 
 // Error handling
