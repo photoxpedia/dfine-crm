@@ -1,7 +1,8 @@
 #!/bin/sh
 
 echo "Running database migrations..."
-npx prisma db push --skip-generate || echo "WARNING: Database push failed. Server will start anyway."
+timeout -t 30 npx prisma db push --skip-generate 2>&1 || true
+echo "Database push step completed (or skipped)."
 
 echo "Starting server..."
 exec node dist/index.js
