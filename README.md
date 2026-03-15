@@ -1,6 +1,6 @@
-# D'Fine Kitchen & Bath Remodeling CRM
+# ReModel Sync
 
-A custom CRM system for bathroom and kitchen remodeling business with:
+AI-first CRM for Remodeling Companies with:
 - Lead management
 - Custom pricing engine (bathroom/kitchen pricing)
 - Estimate builder with margin calculations
@@ -79,7 +79,7 @@ Create `backend/.env` file:
 
 ```env
 # Database
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/dfine_crm"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/remodel_sync"
 
 # JWT Authentication
 JWT_SECRET="your-super-secret-jwt-key-change-this-in-production"
@@ -98,7 +98,7 @@ SMTP_HOST="smtp.gmail.com"
 SMTP_PORT="587"
 SMTP_USER="your-email@gmail.com"
 SMTP_PASS="your-app-password"
-SMTP_FROM="D'Fine KB <noreply@dfinekb.com>"
+SMTP_FROM="ReModel Sync <noreply@remodelsync.com>"
 
 # Square Payments (optional)
 SQUARE_ACCESS_TOKEN=""
@@ -112,7 +112,7 @@ SQUARE_ENVIRONMENT="sandbox"
 cd backend
 
 # Create PostgreSQL database
-createdb dfine_crm
+createdb remodel_sync
 
 # Generate Prisma client
 npm run db:generate
@@ -152,8 +152,8 @@ cd frontend && npm run dev
 
 | Email | Role | Description |
 |-------|------|-------------|
-| admin@dfinekb.com | Admin | Full system access |
-| designer@dfinekb.com | Designer | Lead & project management |
+| admin@remodelsync.com | Admin | Full system access |
+| designer@remodelsync.com | Designer | Lead & project management |
 
 **Login**: Use Magic Link - in development, the link is logged to the console.
 

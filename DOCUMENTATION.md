@@ -1,4 +1,4 @@
-# D'Fine Kitchen & Bath Remodeling CRM
+# ReModel Sync
 ## Comprehensive System Documentation
 
 ---
@@ -30,7 +30,7 @@
 
 ## 1.1 Purpose
 
-D'Fine Kitchen & Bath Remodeling CRM is a specialized Customer Relationship Management system designed specifically for bathroom and kitchen remodeling businesses. It provides end-to-end project management from initial lead capture through project completion and final payment.
+ReModel Sync is a specialized Customer Relationship Management system designed specifically for bathroom and kitchen remodeling businesses. It provides end-to-end project management from initial lead capture through project completion and final payment.
 
 ## 1.2 Key Business Objectives
 
@@ -44,7 +44,7 @@ D'Fine Kitchen & Bath Remodeling CRM is a specialized Customer Relationship Mana
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    D'Fine CRM System                            │
+│                    ReModel Sync System                           │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
 │  │   Admin     │  │  Designer   │  │   Client    │             │
@@ -1173,7 +1173,7 @@ laborVariance = actualLaborCost - expectedLaborCost
 
 **Database:**
 ```env
-DATABASE_URL="postgresql://user:password@localhost:5432/dfine_crm"
+DATABASE_URL="postgresql://user:password@localhost:5432/remodel_sync"
 ```
 
 **Authentication:**
@@ -1194,8 +1194,8 @@ PORT=3000
 **Email (SendGrid):**
 ```env
 SENDGRID_API_KEY="your-sendgrid-api-key"
-EMAIL_FROM="noreply@dfinekb.com"
-EMAIL_FROM_NAME="D'Fine Kitchen & Bath Remodeling"
+EMAIL_FROM="noreply@remodelsync.com"
+EMAIL_FROM_NAME="ReModel Sync"
 ```
 
 **Payments (Square):**
@@ -1318,8 +1318,8 @@ npm run db:studio
 
 | Email | Password | Role |
 |-------|----------|------|
-| admin@dfinekb.com | password123 | Admin |
-| designer@dfinekb.com | password123 | Designer |
+| admin@remodelsync.com | password123 | Admin |
+| designer@remodelsync.com | password123 | Designer |
 
 ---
 
@@ -1420,4 +1420,4 @@ npm run db:studio
 
 **Document End**
 
-*D'Fine Kitchen & Bath Remodeling CRM - Version 1.0.0*
+*ReModel Sync - Version 1.0.0*

@@ -297,11 +297,11 @@ const formatDate = (date: string): string => {
 export default function EstimatePDFTemplate({
   estimate,
   companyInfo = {
-    name: "D'Fine Kitchen & Bath Remodeling",
-    address: '123 Main Street, Ellicott City, MD 21042',
-    phone: '(410) 555-1234',
-    email: 'info@dfinekb.com',
-    website: 'www.dfinekb.com',
+    name: 'ReModel Sync',
+    address: '',
+    phone: '',
+    email: 'info@remodelsync.com',
+    website: 'www.remodelsync.com',
   },
 }: EstimatePDFProps) {
   const project = estimate.project;

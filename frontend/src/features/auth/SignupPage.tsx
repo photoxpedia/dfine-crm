@@ -46,7 +46,7 @@ export default function SignupPage() {
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-designer-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-2xl">D</span>
+            <span className="text-white font-bold text-2xl">RS</span>
           </div>
           <h1 className="text-3xl font-bold text-gray-900">Create your account</h1>
           <p className="text-gray-600 mt-2">Start your 14-day free trial</p>

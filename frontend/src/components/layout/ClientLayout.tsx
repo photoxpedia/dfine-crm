@@ -46,10 +46,10 @@ export default function ClientLayout() {
             <div className="flex items-center">
               <Link to="/client" className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-client-500 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">D</span>
+                  <span className="text-white font-bold text-sm">RS</span>
                 </div>
                 <span className="text-gray-900 font-semibold hidden sm:block">
-                  D'Fine Kitchen & Bath
+                  ReModel Sync
                 </span>
               </Link>
             </div>
@@ -170,7 +170,7 @@ export default function ClientLayout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <p className="text-sm text-gray-500">
-              &copy; {new Date().getFullYear()} D'Fine Kitchen & Bath Remodeling. All rights reserved.
+              &copy; {new Date().getFullYear()} ReModel Sync. All rights reserved.
             </p>
             <div className="flex items-center gap-4">
               <a href="tel:+1234567890" className="text-sm text-gray-500 hover:text-gray-700">

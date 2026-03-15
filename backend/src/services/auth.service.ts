@@ -59,7 +59,7 @@ export async function requestMagicLink(email: string): Promise<MagicLinkResult> 
 
   const emailSent = await sendEmail({
     to: normalizedEmail,
-    subject: "Your Login Link - D'Fine Kitchen & Bath Remodeling",
+    subject: "Your Login Link - ReModel Sync",
     html: `
       <!DOCTYPE html>
       <html>
@@ -81,7 +81,7 @@ export async function requestMagicLink(email: string): Promise<MagicLinkResult> 
         </head>
         <body>
           <div class="container">
-            <h2>Login to D'Fine Kitchen & Bath Remodeling CRM</h2>
+            <h2>Login to ReModel Sync CRM</h2>
             <p>Click the button below to securely log in to your account:</p>
             <a href="${magicLinkUrl}" class="button">Log In</a>
             <p>Or copy and paste this link into your browser:</p>
@@ -89,7 +89,7 @@ export async function requestMagicLink(email: string): Promise<MagicLinkResult> 
             <p><strong>This link will expire in ${MAGIC_LINK_EXPIRY_MINUTES} minutes.</strong></p>
             <div class="footer">
               <p>If you didn't request this login link, you can safely ignore this email.</p>
-              <p>&copy; ${new Date().getFullYear()} D'Fine Kitchen & Bath Remodeling</p>
+              <p>&copy; ${new Date().getFullYear()} ReModel Sync</p>
             </div>
           </div>
         </body>
@@ -222,7 +222,7 @@ export async function createClientInvite(
             <p style="word-break: break-all;">${inviteUrl}</p>
             <p><strong>This invitation expires in ${CLIENT_INVITE_EXPIRY_DAYS} days.</strong></p>
             <div class="footer">
-              <p>&copy; ${new Date().getFullYear()} D'Fine Kitchen & Bath Remodeling</p>
+              <p>&copy; ${new Date().getFullYear()} ReModel Sync</p>
             </div>
           </div>
         </body>
@@ -416,7 +416,7 @@ export async function registerUser(data: {
     const verifyUrl = `${process.env.APP_URL || 'http://localhost:5174'}/auth/verify-email?token=${emailVerificationToken}`;
     sendEmail({
       to: result.email,
-      subject: 'Verify Your Email - D\'Fine Kitchen & Bath Remodeling',
+      subject: 'Verify Your Email - ReModel Sync',
       html: `
         <!DOCTYPE html>
         <html>
@@ -445,7 +445,7 @@ export async function registerUser(data: {
               <p style="word-break: break-all;">${verifyUrl}</p>
               <div class="footer">
                 <p>If you didn't create an account, you can safely ignore this email.</p>
-                <p>&copy; ${new Date().getFullYear()} D'Fine Kitchen & Bath Remodeling</p>
+                <p>&copy; ${new Date().getFullYear()} ReModel Sync</p>
               </div>
             </div>
           </body>
@@ -593,7 +593,7 @@ export async function resendVerificationEmail(userId: string): Promise<{ success
   const verifyUrl = `${process.env.APP_URL || 'http://localhost:5174'}/auth/verify-email?token=${emailVerificationToken}`;
   const emailSent = await sendEmail({
     to: user.email,
-    subject: 'Verify Your Email - D\'Fine Kitchen & Bath Remodeling',
+    subject: 'Verify Your Email - ReModel Sync',
     html: `
       <!DOCTYPE html>
       <html>
@@ -622,7 +622,7 @@ export async function resendVerificationEmail(userId: string): Promise<{ success
             <p style="word-break: break-all;">${verifyUrl}</p>
             <div class="footer">
               <p>If you didn't request this, you can safely ignore this email.</p>
-              <p>&copy; ${new Date().getFullYear()} D'Fine Kitchen & Bath Remodeling</p>
+              <p>&copy; ${new Date().getFullYear()} ReModel Sync</p>
             </div>
           </div>
         </body>
@@ -666,7 +666,7 @@ export async function forgotPassword(email: string): Promise<{ success: boolean;
   const resetUrl = `${process.env.APP_URL || 'http://localhost:5174'}/auth/reset-password?token=${resetToken}`;
   await sendEmail({
     to: user.email,
-    subject: 'Reset Your Password - D\'Fine Kitchen & Bath Remodeling',
+    subject: 'Reset Your Password - ReModel Sync',
     html: `
       <!DOCTYPE html>
       <html>
@@ -696,7 +696,7 @@ export async function forgotPassword(email: string): Promise<{ success: boolean;
             <p><strong>This link will expire in 1 hour.</strong></p>
             <div class="footer">
               <p>If you didn't request a password reset, you can safely ignore this email.</p>
-              <p>&copy; ${new Date().getFullYear()} D'Fine Kitchen & Bath Remodeling</p>
+              <p>&copy; ${new Date().getFullYear()} ReModel Sync</p>
             </div>
           </div>
         </body>

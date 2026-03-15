@@ -1,7 +1,7 @@
 {
-  "name": "dfine-crm-backend",
+  "name": "remodel-sync-backend",
   "version": "1.0.0",
-  "description": "Backend for D'Fine Kitchen & Bath Remodeling CRM",
+  "description": "Backend for ReModel Sync CRM",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx src/index.ts",

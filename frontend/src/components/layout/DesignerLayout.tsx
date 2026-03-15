@@ -88,9 +88,9 @@ export default function DesignerLayout() {
         <div className="flex h-16 items-center justify-between px-6 border-b border-gray-200">
           <Link to="/designer" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-designer-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">D</span>
+              <span className="text-white font-bold text-sm">RS</span>
             </div>
-            <span className="text-gray-900 font-semibold">D'Fine CRM</span>
+            <span className="text-gray-900 font-semibold">ReModel Sync</span>
           </Link>
           <button
             className="lg:hidden text-gray-400 hover:text-gray-600"

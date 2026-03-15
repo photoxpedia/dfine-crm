@@ -187,7 +187,7 @@ Frontend                         Backend                          Database
 ├──────────────────────────────────────────────────────────────────┤
 │                                                                   │
 │  ┌─────────────────────────────────────────────────────────────┐ │
-│  │  D'Fine Kitchen & Bath Remodeling                           │ │
+│  │  ReModel Sync                                               │ │
 │  │                                                              │ │
 │  │  Estimate for: Kitchen Renovation                           │ │
 │  │  Prepared for: John Smith                                   │ │

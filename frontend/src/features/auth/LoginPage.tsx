@@ -102,10 +102,10 @@ export default function LoginPage() {
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-designer-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-2xl">D</span>
+            <span className="text-white font-bold text-2xl">RS</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">D'Fine CRM</h1>
-          <p className="text-gray-600 mt-2">Kitchen & Bath Remodeling</p>
+          <h1 className="text-3xl font-bold text-gray-900">ReModel Sync</h1>
+          <p className="text-gray-600 mt-2">AI-first CRM for Remodeling Companies</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-8">
@@ -278,7 +278,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-sm text-gray-500 mt-6">
-          &copy; {new Date().getFullYear()} D'Fine Kitchen & Bath Remodeling LLC
+          &copy; {new Date().getFullYear()} ReModel Sync
         </p>
       </div>
     </div>

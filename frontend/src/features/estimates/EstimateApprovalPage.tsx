@@ -179,7 +179,7 @@ export default function EstimateApprovalPage() {
               : 'This link is invalid or has already been used.'}
           </p>
           <a
-            href="mailto:info@dfinekb.com"
+            href="mailto:support@remodelsync.com"
             className="btn btn-designer inline-flex items-center"
           >
             <Mail className="w-4 h-4 mr-2" />
@@ -199,7 +199,7 @@ export default function EstimateApprovalPage() {
       {/* Header */}
       <div className="bg-gradient-to-r from-designer-600 to-designer-700 text-white">
         <div className="max-w-5xl mx-auto px-4 py-8">
-          <h1 className="text-2xl font-bold">D'Fine Kitchen & Bath Remodeling</h1>
+          <h1 className="text-2xl font-bold">ReModel Sync</h1>
           <p className="text-designer-100 mt-1">Estimate Review</p>
         </div>
       </div>
@@ -496,8 +496,8 @@ export default function EstimateApprovalPage() {
       {/* Footer */}
       <div className="bg-gray-900 text-gray-400 py-8 mt-12">
         <div className="max-w-5xl mx-auto px-4 text-center text-sm">
-          <p>D'Fine Kitchen & Bath Remodeling</p>
-          <p className="mt-1">123 Main Street, Ellicott City, MD 21042 | (410) 555-1234 | info@dfinekb.com</p>
+          <p>ReModel Sync</p>
+          <p className="mt-1">AI-first CRM for Remodeling Companies</p>
         </div>
       </div>
 
@@ -566,8 +566,8 @@ export default function EstimateApprovalPage() {
                         </h3>
                         <div className="space-y-4 text-gray-700">
                           <p>
-                            This Service Agreement ("Agreement") is entered into between D'Fine Kitchen & Bath
-                            Remodeling ("Company") and the undersigned client ("Client") for the services
+                            This Service Agreement ("Agreement") is entered into between the Company
+                            and the undersigned client ("Client") for the services
                             described in the attached estimate.
                           </p>
 

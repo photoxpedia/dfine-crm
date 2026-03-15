@@ -206,12 +206,12 @@ async function main() {
 
   // Create organization first
   const organization = await prisma.organization.upsert({
-    where: { slug: 'dfine-kb' },
+    where: { slug: 'remodel-sync' },
     update: {},
     create: {
-      name: "D'Fine Kitchen & Bath",
-      slug: 'dfine-kb',
-      email: 'info@dfinekb.com',
+      name: 'ReModel Sync',
+      slug: 'remodel-sync',
+      email: 'info@remodelsync.com',
       phone: '(555) 123-4567',
       address: '123 Business Ave',
       city: 'Austin',
@@ -223,10 +223,10 @@ async function main() {
 
   // Create admin user
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@dfinekb.com' },
+    where: { email: 'admin@remodelsync.com' },
     update: { passwordHash },
     create: {
-      email: 'admin@dfinekb.com',
+      email: 'admin@remodelsync.com',
       name: 'Admin User',
       role: 'admin',
       passwordHash,
@@ -237,10 +237,10 @@ async function main() {
 
   // Create designer user
   const designer = await prisma.user.upsert({
-    where: { email: 'designer@dfinekb.com' },
+    where: { email: 'designer@remodelsync.com' },
     update: { passwordHash },
     create: {
-      email: 'designer@dfinekb.com',
+      email: 'designer@remodelsync.com',
       name: 'Tanya Designer',
       role: 'designer',
       passwordHash,
@@ -335,7 +335,7 @@ async function main() {
   const templates = [
     {
       name: 'magic_link',
-      subject: "Your Login Link - D'Fine Kitchen & Bath Remodeling",
+      subject: 'Your Login Link - ReModel Sync',
       body: 'Click here to login: {{link}}',
     },
     {

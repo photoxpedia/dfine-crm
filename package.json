@@ -1,5 +1,5 @@
 {
-  "name": "dfine-kitchen-bath-crm",
+  "name": "remodel-sync-crm",
   "version": "1.0.0",
   "description": "CRM for bathroom and kitchen remodeling business",
   "private": true,
@@ -38,6 +38,6 @@
     "estimate",
     "project-management"
   ],
-  "author": "D'Fine Kitchen & Bath Remodeling",
+  "author": "ReModel Sync",
   "license": "UNLICENSED"
 }

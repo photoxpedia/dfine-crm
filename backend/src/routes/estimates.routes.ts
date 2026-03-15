@@ -624,7 +624,7 @@ router.post('/:id/finalize', authenticate, requireDesignerOrAdmin, async (req: R
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); padding: 30px; text-align: center;">
-            <h1 style="color: white; margin: 0;">D'Fine Kitchen & Bath</h1>
+            <h1 style="color: white; margin: 0;">ReModel Sync</h1>
           </div>
           <div style="padding: 30px; background: #f9fafb;">
             <h2 style="color: #1f2937;">Your Estimate is Ready!</h2>
@@ -655,9 +655,8 @@ router.post('/:id/finalize', authenticate, requireDesignerOrAdmin, async (req: R
           </div>
           <div style="background: #1f2937; padding: 20px; text-align: center;">
             <p style="color: #9ca3af; margin: 0; font-size: 12px;">
-              D'Fine Kitchen & Bath Remodeling<br>
-              123 Main Street, Ellicott City, MD 21042<br>
-              (410) 555-1234 | info@dfinekb.com
+              ReModel Sync<br>
+              AI-first CRM for Remodeling Companies
             </p>
           </div>
         </div>
@@ -898,8 +897,8 @@ router.post('/approval/:token/approve', async (req: Request, res: Response) => {
           </div>
           <div style="background: #1f2937; padding: 20px; text-align: center;">
             <p style="color: #9ca3af; margin: 0; font-size: 12px;">
-              D'Fine Kitchen & Bath Remodeling<br>
-              (410) 555-1234 | info@dfinekb.com
+              ReModel Sync<br>
+              AI-first CRM for Remodeling Companies
             </p>
           </div>
         </div>

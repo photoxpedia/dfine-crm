@@ -155,7 +155,7 @@ router.post('/:id/send', authenticate, requireDesignerOrAdmin, async (req: Reque
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #059669 0%, #047857 100%); padding: 30px; text-align: center;">
-          <h1 style="color: white; margin: 0;">D'Fine Kitchen & Bath</h1>
+          <h1 style="color: white; margin: 0;">ReModel Sync</h1>
         </div>
         <div style="padding: 30px; background: #f9fafb;">
           <h2 style="color: #1f2937;">Invoice ${invoice.invoiceNumber}</h2>
@@ -176,7 +176,7 @@ router.post('/:id/send', authenticate, requireDesignerOrAdmin, async (req: Reque
           <div style="background: #fef3c7; padding: 15px; border-radius: 4px; margin: 20px 0;">
             <p style="margin: 0; color: #92400e; font-size: 14px;">
               <strong>Payment Methods:</strong><br>
-              Check: Make payable to "D'Fine Kitchen & Bath Remodeling"<br>
+              Check: Make payable to your remodeling company<br>
               Credit Card: Contact us for a secure payment link
             </p>
           </div>
@@ -186,9 +186,8 @@ router.post('/:id/send', authenticate, requireDesignerOrAdmin, async (req: Reque
         </div>
         <div style="background: #1f2937; padding: 20px; text-align: center;">
           <p style="color: #9ca3af; margin: 0; font-size: 12px;">
-            D'Fine Kitchen & Bath Remodeling<br>
-            123 Main Street, Ellicott City, MD 21042<br>
-            (410) 555-1234 | info@dfinekb.com
+            ReModel Sync<br>
+            AI-first CRM for Remodeling Companies
           </p>
         </div>
       </div>

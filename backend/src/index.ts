@@ -100,7 +100,7 @@ app.listen(Number(PORT), HOST, () => {
   console.log(`
   ╔═══════════════════════════════════════════════════╗
   ║                                                   ║
-  ║   D'Fine Kitchen & Bath Remodeling CRM API        ║
+  ║   ReModel Sync CRM API                            ║
   ║   Running on http://${HOST}:${PORT}                  ║
   ║                                                   ║
   ╚═══════════════════════════════════════════════════╝

@@ -34,7 +34,7 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
 
   try {
     await transporter.sendMail({
-      from: `"${process.env.EMAIL_FROM_NAME || "D'Fine Kitchen & Bath Remodeling"}" <${process.env.EMAIL_FROM || 'noreply@dfinekb.com'}>`,
+      from: `"${process.env.EMAIL_FROM_NAME || 'ReModel Sync'}" <${process.env.EMAIL_FROM || 'noreply@remodelsync.com'}>`,
       to: options.to,
       subject: options.subject,
       html: options.html,

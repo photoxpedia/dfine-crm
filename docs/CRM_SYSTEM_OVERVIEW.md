@@ -1,4 +1,4 @@
-# D'Fine Kitchen & Bath CRM - Complete System Documentation
+# ReModel Sync - Complete System Documentation
 
 ## Table of Contents
 1. [System Architecture](#system-architecture)
